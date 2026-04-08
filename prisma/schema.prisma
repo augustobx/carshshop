@@ -1,0 +1,159 @@
+generator client {
+  provider = "prisma-client"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model Usuario {
+  id_usuario Int        @id @default(autoincrement())
+  nombre     String
+  email      String     @unique
+  password   String
+  rol        RolUsuario
+  ventas     Venta[]
+}
+
+model Cliente {
+  id_cliente       Int        @id @default(autoincrement())
+  nombre_completo  String
+  dni              String?    @unique
+  telefono         String?
+  email            String?
+  domicilio        String?
+  ventas           Venta[]
+  prestamos        Prestamo[]
+  senias           Senia[]
+}
+
+model Vehiculo {
+  id_vehiculo       Int            @id @default(autoincrement())
+  marca             String?
+  modelo            String?
+  anio              Int?
+  patente           String?        @unique
+  precio_compra_usd Decimal?       @db.Decimal(10, 2)
+  precio_venta_usd  Decimal?       @db.Decimal(10, 2)
+  estado            EstadoVehiculo @default(EN_PREPARACION)
+  ventas            Venta[]
+  tareas            Tarea[]
+  senias            Senia[]
+}
+
+model Configuracion {
+  clave String @id
+  valor String
+}
+
+model Venta {
+  id_venta               Int          @id @default(autoincrement())
+  id_vehiculo            Int
+  id_cliente             Int
+  id_vendedor_interno    Int?
+  precio_final_usd       Decimal      @db.Decimal(10, 2)
+  forma_pago             FormaPago
+  cotizacion_dolar_venta Decimal?     @db.Decimal(10, 2)
+  fecha_venta            DateTime     @default(now())
+  vehiculo               Vehiculo     @relation(fields: [id_vehiculo], references: [id_vehiculo])
+  cliente                Cliente      @relation(fields: [id_cliente], references: [id_cliente])
+  vendedor               Usuario?     @relation(fields: [id_vendedor_interno], references: [id_usuario])
+  cuotas                 VentaCuota[]
+}
+
+model VentaCuota {
+  id_cuota          Int         @id @default(autoincrement())
+  id_venta          Int
+  numero_cuota      Int
+  fecha_vencimiento DateTime
+  monto_usd         Decimal     @db.Decimal(10, 2)
+  estado            EstadoCuota @default(PENDIENTE)
+  venta             Venta       @relation(fields: [id_venta], references: [id_venta])
+}
+
+model Prestamo {
+  id_prestamo       Int             @id @default(autoincrement())
+  id_cliente        Int
+  monto_capital_usd Decimal         @db.Decimal(12, 2)
+  cantidad_cuotas   Int
+  valor_cuota_usd   Decimal         @db.Decimal(12, 2)
+  estado            EstadoPrestamo  @default(EN_CURSO)
+  cliente           Cliente         @relation(fields: [id_cliente], references: [id_cliente])
+  cuotas            PrestamoCuota[]
+}
+
+model PrestamoCuota {
+  id_cuota          Int         @id @default(autoincrement())
+  id_prestamo       Int
+  numero_cuota      Int
+  fecha_vencimiento DateTime
+  monto_usd         Decimal     @db.Decimal(12, 2)
+  estado            EstadoCuota @default(PENDIENTE)
+  prestamo          Prestamo    @relation(fields: [id_prestamo], references: [id_prestamo])
+}
+
+model Tarea {
+  id_tarea     Int         @id @default(autoincrement())
+  id_vehiculo  Int
+  descripcion  String
+  estado_tarea EstadoTarea @default(PENDIENTE)
+  vehiculo     Vehiculo    @relation(fields: [id_vehiculo], references: [id_vehiculo])
+  gastos       Gasto[]
+}
+
+model Gasto {
+  id_gasto    Int      @id @default(autoincrement())
+  id_tarea    Int
+  monto_usd   Decimal  @db.Decimal(10, 2)
+  descripcion String?
+  tarea       Tarea    @relation(fields: [id_tarea], references: [id_tarea])
+}
+
+model Senia {
+  id_senia    Int        @id @default(autoincrement())
+  id_vehiculo Int
+  id_cliente  Int
+  monto_usd   Decimal    @db.Decimal(10, 2)
+  estado      EstadoSenia @default(ACTIVA)
+  vehiculo    Vehiculo   @relation(fields: [id_vehiculo], references: [id_vehiculo])
+  cliente     Cliente    @relation(fields: [id_cliente], references: [id_cliente])
+}
+
+enum RolUsuario {
+  Admin
+  Vendedor
+  RRHH
+}
+
+enum EstadoVehiculo {
+  EN_PREPARACION
+  LISTO_PARA_VENTA
+  EN_CONSIGNACION
+  SENADO
+  VENDIDO
+}
+
+enum FormaPago {
+  Contado
+  Cuotas
+}
+
+enum EstadoCuota {
+  PENDIENTE
+  PAGADA
+}
+
+enum EstadoPrestamo {
+  EN_CURSO
+  FINALIZADO
+}
+
+enum EstadoTarea {
+  PENDIENTE
+  FINALIZADA
+}
+
+enum EstadoSenia {
+  ACTIVA
+  CANCELADA
+}
