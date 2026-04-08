@@ -1,40 +1,28 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
-import { Sidebar } from "@/components/Sidebar";
-import { ConfigInitializer } from "@/components/ConfigInitializer";
+import Sidebar from "@/components/Sidebar";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "CarShop ERP",
-  description: "Sistema Avanzado de Gestión de Agencia de Vehículos",
-  manifest: "/manifest.json",
+  title: "CarShop ERP | Gestión Integral",
+  description: "Sistema de gestión para agencias de vehículos",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html
-      lang="es"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
-    >
-      <body className="min-h-full bg-background flex">
-        <ConfigInitializer />
+    <html lang="es">
+      <body className={`${inter.className} bg-slate-50 text-slate-900 flex min-h-screen antialiased`}>
+        {/* Barra Lateral Global */}
         <Sidebar />
-        <main className="flex-1 ml-64 min-h-screen overflow-y-auto p-8">
-          {children}
+
+        {/* Área de Contenido Principal */}
+        <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {/* Aquí se renderiza cada módulo (Vehículos, Ventas, etc.) */}
+          <div className="flex-1 overflow-y-auto">
+            {children}
+          </div>
         </main>
       </body>
     </html>
