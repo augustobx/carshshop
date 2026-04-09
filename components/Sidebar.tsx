@@ -3,61 +3,83 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, CarFront, Users, BadgeDollarSign,
-  Wallet, ClipboardList, Handshake, FileText, Settings, LogOut
+  Car,
+  LayoutDashboard,
+  BadgeDollarSign,
+  Users,
+  CalendarClock,
+  HandCoins,
+  Settings,
+  LogOut,
+  FileText,
+  Wallet,
+  CarFront
 } from 'lucide-react';
-
-const MENU_ITEMS = [
-  { name: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
-  { name: 'Vehículos', icon: CarFront, href: '/vehiculos' },
-  { name: 'Ventas y Cotizador', icon: BadgeDollarSign, href: '/ventas' },
-  { name: 'Préstamos', icon: Handshake, href: '/prestamos' },
-  { name: 'Caja y Gastos', icon: Wallet, href: '/caja' },
-  { name: 'Clientes', icon: Users, href: '/clientes' },
-  { name: 'Consignaciones', icon: ClipboardList, href: '/consignaciones' },
-  { name: 'Documentos', icon: FileText, href: '/documentos' },
-];
 
 export default function Sidebar() {
   const pathname = usePathname();
 
+  // Definimos todas las rutas del sistema
+  const menuItems = [
+    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+    { name: 'Vehículos', href: '/vehiculos', icon: Car },
+    { name: 'Ventas y Cotizador', href: '/ventas', icon: BadgeDollarSign },
+    { name: 'Cobranzas y Cuotas', href: '/cuotas', icon: CalendarClock }, // <-- AQUÍ ESTÁ EL NUEVO MÓDULO
+    { name: 'Préstamos', href: '/prestamos', icon: HandCoins },
+    { name: 'Caja y Gastos', href: '/caja', icon: Wallet },
+    { name: 'Clientes', href: '/clientes', icon: Users },
+    { name: 'Consignaciones', href: '/consignaciones', icon: CarFront },
+    { name: 'Documentos', href: '/documentos', icon: FileText },
+  ];
+
   return (
-    <aside className="w-64 bg-slate-900 text-slate-300 h-screen sticky top-0 flex flex-col shadow-xl flex-shrink-0">
-      {/* Logo Area */}
-      <div className="h-16 flex items-center px-6 border-b border-slate-800 bg-slate-950/50">
-        <CarFront className="w-7 h-7 text-indigo-500 mr-3" />
-        <span className="text-xl font-black text-white tracking-tight">CarShop<span className="text-indigo-500">ERP</span></span>
+    <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col h-screen shrink-0 border-r border-slate-800 transition-all">
+      {/* Logo */}
+      <div className="h-16 flex items-center px-6 border-b border-slate-800">
+        <Link href="/" className="flex items-center gap-2 text-white hover:text-indigo-400 transition-colors">
+          <Car className="w-6 h-6 text-indigo-500" />
+          <span className="font-black text-xl tracking-tight">CarShop<span className="text-indigo-500">ERP</span></span>
+        </Link>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-6 px-3 space-y-1 custom-scrollbar">
-        <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 px-3">Menú Principal</div>
-        {MENU_ITEMS.map((item) => {
-          const isActive = pathname.startsWith(item.href);
+      {/* Menú Principal */}
+      <div className="flex-1 overflow-y-auto py-6 px-4 space-y-1 custom-scrollbar">
+        <p className="px-2 text-xs font-black text-slate-500 uppercase tracking-wider mb-4">Menú Principal</p>
+
+        {menuItems.map((item) => {
+          const Icon = item.icon;
+          // Verificamos si la ruta actual coincide con la del botón para pintarlo de "Activo"
+          const isActive = pathname === item.href || (pathname.startsWith(item.href) && item.href !== '/');
+
           return (
             <Link
-              key={item.name}
+              key={item.href}
               href={item.href}
-              className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group ${isActive
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${isActive
                   ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/20'
                   : 'hover:bg-slate-800 hover:text-white'
                 }`}
             >
-              <item.icon className={`w-5 h-5 mr-3 flex-shrink-0 transition-transform duration-200 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
+              <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-slate-400'}`} />
               {item.name}
             </Link>
           );
         })}
-      </nav>
+      </div>
 
-      {/* Bottom Actions */}
-      <div className="p-4 border-t border-slate-800 space-y-2 bg-slate-950/30">
-        <Link href="/configuracion" className="flex items-center px-3 py-2 text-sm font-medium rounded-lg hover:bg-slate-800 hover:text-white transition-colors">
-          <Settings className="w-5 h-5 mr-3 text-slate-400" />
+      {/* Configuración y Perfil (Abajo) */}
+      <div className="p-4 border-t border-slate-800 space-y-1 bg-slate-900/50">
+        <Link
+          href="/configuracion"
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${pathname.startsWith('/configuracion') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800 hover:text-white'
+            }`}
+        >
+          <Settings className="w-5 h-5 text-slate-400" />
           Configuración
         </Link>
-        <button className="w-full flex items-center px-3 py-2 text-sm font-medium rounded-lg text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors">
-          <LogOut className="w-5 h-5 mr-3" />
+
+        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-red-400 hover:bg-red-950/30 hover:text-red-300 transition-colors">
+          <LogOut className="w-5 h-5" />
           Cerrar Sesión
         </button>
       </div>

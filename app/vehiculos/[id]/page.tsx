@@ -11,13 +11,12 @@ export default async function DetalleVehiculoPage({ params }: { params: Promise<
     if (isNaN(idVehiculo)) notFound();
 
     // Traemos el vehículo con todas sus relaciones (Tareas y Gastos)
+    const clientesDb = await db.cliente.findMany({ orderBy: { nombre_completo: 'asc' } });
     const vehiculoDb = await db.vehiculo.findUnique({
         where: { id_vehiculo: idVehiculo },
         include: {
-            tareas: {
-                include: { gastos: true },
-                orderBy: { id_tarea: 'desc' }
-            }
+            tareas: { include: { gastos: true }, orderBy: { id_tarea: 'desc' } },
+            senias: { include: { cliente: true }, orderBy: { id_senia: 'desc' } } // <-- AGREGAR ESTO
         }
     });
 
@@ -39,5 +38,5 @@ export default async function DetalleVehiculoPage({ params }: { params: Promise<
         }))
     };
 
-    return <VehiculoDashboardClient vehiculo={vehiculoData as any} />;
+    return <VehiculoDashboardClient vehiculo={vehiculoData as any} clientes={clientesDb} />;
 }

@@ -26,6 +26,7 @@ model Cliente {
   ventas           Venta[]
   prestamos        Prestamo[]
   senias           Senia[]
+  vehiculos   Vehiculo[]
 }
 
 model Vehiculo {
@@ -53,6 +54,27 @@ model Vehiculo {
   ventas            Venta[]
   tareas            Tarea[]
   senias            Senia[]
+  fotos             VehiculoFoto[] // Faltaba esta línea
+  anotaciones       Anotacion[]    // Y faltaba esta línea
+  notas_internas  String?  @db.Text
+  id_cliente  Int?
+  cliente     Cliente?  @relation(fields: [id_cliente], references: [id_cliente])
+  
+}
+
+model VehiculoFoto {
+  id_foto     Int      @id @default(autoincrement())
+  id_vehiculo Int
+  url_foto    String   // Ruta de la imagen guardada
+  vehiculo    Vehiculo @relation(fields: [id_vehiculo], references: [id_vehiculo], onDelete: Cascade)
+}
+
+model Anotacion {
+  id_anotacion Int      @id @default(autoincrement())
+  id_vehiculo  Int
+  texto        String   @db.Text
+  fecha        DateTime @default(now())
+  vehiculo     Vehiculo @relation(fields: [id_vehiculo], references: [id_vehiculo], onDelete: Cascade)
 }
 
 model Configuracion {
@@ -76,34 +98,51 @@ model Venta {
 }
 
 model VentaCuota {
-  id_cuota          Int         @id @default(autoincrement())
+  id_cuota          Int      @id @default(autoincrement())
   id_venta          Int
   numero_cuota      Int
+  monto_usd         Decimal
   fecha_vencimiento DateTime
-  monto_usd         Decimal     @db.Decimal(10, 2)
-  estado            EstadoCuota @default(PENDIENTE)
-  venta             Venta       @relation(fields: [id_venta], references: [id_venta])
+  estado            String   @default("PENDIENTE")
+
+  // IMPORTANTE: Los 3 campos nuevos para la cobranza inteligente
+  monto_pagado_ars  Decimal?
+  cotizacion_pago   Decimal?
+  fecha_pago        DateTime?
+
+  venta             Venta    @relation(fields: [id_venta], references: [id_venta])
 }
 
 model Prestamo {
-  id_prestamo       Int             @id @default(autoincrement())
-  id_cliente        Int
-  monto_capital_usd Decimal         @db.Decimal(12, 2)
-  cantidad_cuotas   Int
-  valor_cuota_usd   Decimal         @db.Decimal(12, 2)
-  estado            EstadoPrestamo  @default(EN_CURSO)
-  cliente           Cliente         @relation(fields: [id_cliente], references: [id_cliente])
-  cuotas            PrestamoCuota[]
+  id_prestamo               Int             @id @default(autoincrement())
+  id_cliente                Int
+  
+  // Nuevos campos financieros avanzados
+  capital_entregado_usd     Decimal
+  total_devolver_usd        Decimal
+  cotizacion_dolar_prestamo Decimal
+  fecha_prestamo            DateTime        @default(now())
+  estado                    String          @default("ACTIVO")
+
+  // Relaciones
+  cliente                   Cliente         @relation(fields: [id_cliente], references: [id_cliente])
+  cuotas                    PrestamoCuota[]
 }
 
 model PrestamoCuota {
-  id_cuota          Int         @id @default(autoincrement())
+  id_cuota          Int       @id @default(autoincrement())
   id_prestamo       Int
   numero_cuota      Int
+  monto_usd         Decimal
   fecha_vencimiento DateTime
-  monto_usd         Decimal     @db.Decimal(12, 2)
-  estado            EstadoCuota @default(PENDIENTE)
-  prestamo          Prestamo    @relation(fields: [id_prestamo], references: [id_prestamo])
+  estado            String    @default("PENDIENTE")
+  
+  // Historial de pagos inteligente
+  monto_pagado_ars  Decimal?
+  cotizacion_pago   Decimal?
+  fecha_pago        DateTime?
+
+  prestamo          Prestamo  @relation(fields: [id_prestamo], references: [id_prestamo])
 }
 
 model Tarea {
@@ -116,21 +155,33 @@ model Tarea {
 }
 
 model Gasto {
-  id_gasto    Int      @id @default(autoincrement())
-  id_tarea    Int
-  monto_usd   Decimal  @db.Decimal(10, 2)
-  descripcion String?
-  tarea       Tarea    @relation(fields: [id_tarea], references: [id_tarea])
+  id_gasto        Int      @id @default(autoincrement())
+  descripcion     String
+  monto_usd       Decimal
+  monto_ars       Decimal
+  fecha           DateTime @default(now())
+  
+  // Campos para la caja
+  categoria       String?
+  tipo_movimiento String?  @default("EGRESO")
+
+  // IMPORTANTE: El signo de interrogación (?) hace que la tarea NO sea obligatoria
+  id_tarea        Int?
+  tarea           Tarea?   @relation(fields: [id_tarea], references: [id_tarea])
 }
 
 model Senia {
-  id_senia    Int        @id @default(autoincrement())
-  id_vehiculo Int
-  id_cliente  Int
-  monto_usd   Decimal    @db.Decimal(10, 2)
-  estado      EstadoSenia @default(ACTIVA)
-  vehiculo    Vehiculo   @relation(fields: [id_vehiculo], references: [id_vehiculo])
-  cliente     Cliente    @relation(fields: [id_cliente], references: [id_cliente])
+  id_senia     Int         @id @default(autoincrement())
+  id_vehiculo  Int
+  id_cliente   Int
+  fecha_senia  DateTime    @default(now())
+  monto_usd    Decimal     @db.Decimal(10, 2)
+  monto_ars    Decimal     @db.Decimal(12, 2)
+  cotizacion   Decimal     @db.Decimal(10, 2)
+  estado       EstadoSenia @default(ACTIVA)
+  
+  vehiculo     Vehiculo    @relation(fields: [id_vehiculo], references: [id_vehiculo], onDelete: Cascade)
+  cliente      Cliente     @relation(fields: [id_cliente], references: [id_cliente])
 }
 
 enum RolUsuario {
@@ -171,3 +222,5 @@ enum EstadoSenia {
   ACTIVA
   CANCELADA
 }
+
+

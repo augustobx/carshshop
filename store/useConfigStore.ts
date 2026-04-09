@@ -1,28 +1,15 @@
-import { create } from "zustand";
-import { getConfigData } from "../actions/config";
+import { create } from 'zustand';
 
 interface ConfigState {
-  dolarBlue: number;
-  tna: number;
-  setDolarBlue: (val: number) => void;
-  setTna: (val: number) => void;
-  loadConfig: () => Promise<void>;
+  dolarBlue: number; // Mantenemos el nombre de la variable para compatibilidad con el resto del sistema
+  tipoDolar: string;
+  setDolar: (valor: number) => void;
+  setTipoDolar: (tipo: string) => void;
 }
 
 export const useConfigStore = create<ConfigState>((set) => ({
-  dolarBlue: 1000,
-  tna: 0.05,
-  setDolarBlue: (val: number) => set({ dolarBlue: val }),
-  setTna: (val: number) => set({ tna: val }),
-  loadConfig: async () => {
-    try {
-      const data = await getConfigData();
-      set({ 
-        dolarBlue: parseFloat(data.dolar_blue),
-        tna: parseFloat(data.tna)
-      });
-    } catch (err) {
-      console.error("Failed loading config from server action", err);
-    }
-  }
+  dolarBlue: 1000, // Valor por defecto hasta que cargue la DB
+  tipoDolar: 'blue',
+  setDolar: (valor) => set({ dolarBlue: valor }),
+  setTipoDolar: (tipo) => set({ tipoDolar: tipo })
 }));

@@ -4,6 +4,7 @@ import { prisma as db } from '@/lib/prisma';
 import { vehiculoSchema, VehiculoFormData } from '@/schemas/vehiculoSchema';
 import { revalidatePath } from 'next/cache';
 
+
 // Normalización Bimonetaria (PRIORIDAD ARS) portada de tu helpers.php
 function normalizePair(usd: number, ars: number, dolar: number) {
   let finalUsd = Number(usd) || 0;
@@ -21,48 +22,64 @@ async function getDolarActual() {
   return cfg ? parseFloat(cfg.valor) : 1000;
 }
 
-export async function guardarVehiculo(data: VehiculoFormData) {
+export async function guardarVehiculo(data: any) {
   try {
-    const validatedData = vehiculoSchema.parse(data);
-    const dolarBlue = await getDolarActual();
-
-    const compra = normalizePair(validatedData.precio_compra_usd, validatedData.precio_compra_ars, dolarBlue);
-    const venta = normalizePair(validatedData.precio_venta_usd, validatedData.precio_venta_ars, dolarBlue);
-
-    const vehiculo = await db.vehiculo.create({
+    await db.vehiculo.create({
       data: {
-        ...validatedData,
-        precio_compra_usd: compra.usd,
-        precio_compra_ars: compra.ars,
-        precio_venta_usd: venta.usd,
-        precio_venta_ars: venta.ars,
+        marca: data.marca,
+        modelo: data.modelo,
+        anio: data.anio,
+        km: data.km,
+        patente: data.patente,
+        vin: data.vin,
+        motor: data.motor,
+        transmision: data.transmision,
+        traccion: data.traccion,
+        color: data.color,
+        puertas: data.puertas,
+        estado: data.estado,
+        tipo_ingreso: data.tipo_ingreso,
+        comision_consignacion_pct: parseFloat(data.comision_consignacion_pct) || 0,
+        // FORZAMOS EL GUARDADO EXACTO COMO DECIMALES (Sin recálculos)
+        precio_compra_ars: parseFloat(data.precio_compra_ars) || 0,
+        precio_compra_usd: parseFloat(data.precio_compra_usd) || 0,
+        precio_venta_ars: parseFloat(data.precio_venta_ars) || 0,
+        precio_venta_usd: parseFloat(data.precio_venta_usd) || 0,
       }
     });
 
     revalidatePath('/vehiculos');
-    return { success: true, id: vehiculo.id_vehiculo };
+    return { success: true };
   } catch (error) {
-    console.error("Error al guardar:", error);
-    return { success: false, error: 'Error al guardar el vehículo' };
+    console.error("Error guardando vehículo:", error);
+    return { success: false, error: 'Ocurrió un error al guardar el vehículo.' };
   }
 }
 
-export async function actualizarVehiculo(id: number, data: VehiculoFormData) {
+export async function actualizarVehiculo(id: number, data: any) {
   try {
-    const validatedData = vehiculoSchema.parse(data);
-    const dolarBlue = await getDolarActual();
-
-    const compra = normalizePair(validatedData.precio_compra_usd, validatedData.precio_compra_ars, dolarBlue);
-    const venta = normalizePair(validatedData.precio_venta_usd, validatedData.precio_venta_ars, dolarBlue);
-
     await db.vehiculo.update({
       where: { id_vehiculo: id },
       data: {
-        ...validatedData,
-        precio_compra_usd: compra.usd,
-        precio_compra_ars: compra.ars,
-        precio_venta_usd: venta.usd,
-        precio_venta_ars: venta.ars,
+        marca: data.marca,
+        modelo: data.modelo,
+        anio: data.anio,
+        km: data.km,
+        patente: data.patente,
+        vin: data.vin,
+        motor: data.motor,
+        transmision: data.transmision,
+        traccion: data.traccion,
+        color: data.color,
+        puertas: data.puertas,
+        estado: data.estado,
+        tipo_ingreso: data.tipo_ingreso,
+        comision_consignacion_pct: parseFloat(data.comision_consignacion_pct) || 0,
+        // FORZAMOS EL GUARDADO EXACTO COMO DECIMALES
+        precio_compra_ars: parseFloat(data.precio_compra_ars) || 0,
+        precio_compra_usd: parseFloat(data.precio_compra_usd) || 0,
+        precio_venta_ars: parseFloat(data.precio_venta_ars) || 0,
+        precio_venta_usd: parseFloat(data.precio_venta_usd) || 0,
       }
     });
 
@@ -70,8 +87,8 @@ export async function actualizarVehiculo(id: number, data: VehiculoFormData) {
     revalidatePath(`/vehiculos/${id}`);
     return { success: true };
   } catch (error) {
-    console.error("Error al actualizar:", error);
-    return { success: false, error: 'Error al actualizar el vehículo' };
+    console.error("Error actualizando vehículo:", error);
+    return { success: false, error: 'Ocurrió un error al actualizar el vehículo.' };
   }
 }
 
