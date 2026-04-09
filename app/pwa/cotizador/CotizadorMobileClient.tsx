@@ -61,7 +61,7 @@ export default function CotizadorMobileClient({ vehiculos, clientes }: { vehicul
         const pFinalUsd = pFinalArs / dolarBlue;
         const cuotaUsd = valorCuotaArs / dolarBlue;
 
-        let planDePagos = [];
+        let planDePagos: any[] = [];
         if (formaPago === 'Cuotas') {
             planDePagos = Array.from({ length: cuotasN }).map((_, i) => {
                 const hoy = new Date();
