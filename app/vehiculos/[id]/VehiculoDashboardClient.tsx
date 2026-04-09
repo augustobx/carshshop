@@ -13,7 +13,7 @@ import SeniasManager from '@/components/vehiculos/SeniasManager';
 import { PenTool } from 'lucide-react'; // Icono para la pestaña
 
 export default function VehiculoDashboardClient({ vehiculo, clientes }: { vehiculo: any, clientes: any[] }) {
-    const [activeTab, setActiveTab] = useState<'datos' | 'acondicionamiento' | 'galeria' | 'notas'>('datos');
+    const [activeTab, setActiveTab] = useState<'datos' | 'acondicionamiento' | 'galeria' | 'notas' | 'senias'>('datos');
     const { dolarBlue } = useConfigStore(); //
 
     const totalGastosUsd = vehiculo.tareas.reduce((sum: number, t: any) =>
