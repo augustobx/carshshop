@@ -70,7 +70,7 @@ export default function TareasManager({ tareas, idVehiculo }: { tareas: any[], i
                                 </div>
                                 <input placeholder="Detalle del gasto..." value={descGasto} onChange={(e) => setDescGasto(e.target.value)} className="w-full p-2 border rounded text-sm" />
                                 <button onClick={async () => {
-                                    await agregarGasto(tarea.id_tarea, idVehiculo, parseFloat(montoGastoUsd), descGasto);
+                                    await agregarGasto(tarea.id_tarea, idVehiculo, parseFloat(montoGastoArs), dolarBlue, descGasto);
                                     setGastoActivo(null); setMontoGastoUsd(''); setMontoGastoArs(''); setDescGasto('');
                                 }} className="w-full bg-emerald-600 text-white py-2 rounded font-bold text-xs">Registrar Pago</button>
                             </div>
