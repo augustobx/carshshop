@@ -105,7 +105,7 @@ export default function CotizadorClient({ vehiculos, clientes }: { vehiculos: an
         const pFinalUsd = parseFloat((pFinalArs / dolarBlue).toFixed(2));
         const cuotaUsd = parseFloat((valorCuotaArs / dolarBlue).toFixed(2));
 
-        let planDePagos = [];
+        let planDePagos: any[] = [];
         if (formaPago === 'Cuotas') {
             planDePagos = Array.from({ length: cuotasN }).map((_, i) => {
                 // LA SOLUCIÓN DEFINITIVA: Matemática pura, sin que Javascript calcule husos horarios
