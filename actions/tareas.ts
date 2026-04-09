@@ -32,13 +32,23 @@ export async function cambiarEstadoTarea(idTarea: number, nuevoEstado: 'PENDIENT
   }
 }
 
-export async function agregarGasto(idTarea: number, idVehiculo: number, montoUsd: number, descripcion: string) {
+// CORRECCIÓN ACÁ ABAJO 👇: 
+// 1. Ahora la función recibe el monto en ARS y la cotización.
+// 2. Calcula el USD automáticamente.
+// 3. Guarda el monto_ars en la base de datos para que TypeScript no se queje.
+export async function agregarGasto(idTarea: number, idVehiculo: number, montoArs: number, cotizacionDolar: number, descripcion: string) {
   try {
+    const montoUsd = montoArs / cotizacionDolar;
+
     await db.gasto.create({
       data: {
         id_tarea: idTarea,
+        monto_ars: montoArs, // ¡Acá está lo que TypeScript exigía!
         monto_usd: montoUsd,
-        descripcion
+        descripcion: descripcion,
+        // Si tu esquema exige categoría o tipo_movimiento, descomentá esto:
+        // categoria: 'Reparación/Mantenimiento', 
+        // tipo_movimiento: 'EGRESO'
       }
     });
     revalidatePath(`/vehiculos/${idVehiculo}`);
