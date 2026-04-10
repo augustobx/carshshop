@@ -3,30 +3,29 @@ import { create } from 'zustand';
 interface ConfigState {
   dolarBlue: number;
   tipoDolar: string;
+  logo: string | null;
+  tema: { primary: string, hover: string, ring: string } | null;
+
   setDolar: (valor: number) => void;
   setTipoDolar: (tipo: string) => void;
-
-  // 1. LE AVISAMOS A TYPESCRIPT QUE ESTA FUNCIÓN EXISTE
+  setLogo: (logo: string | null) => void;
+  setTema: (tema: any) => void;
   loadConfig: () => Promise<void>;
 }
 
 export const useConfigStore = create<ConfigState>((set) => ({
-  dolarBlue: 1000, // Valor por defecto
+  dolarBlue: 1000,
   tipoDolar: 'blue',
+  logo: null,
+  tema: null,
+
   setDolar: (valor) => set({ dolarBlue: valor }),
   setTipoDolar: (tipo) => set({ tipoDolar: tipo }),
+  setLogo: (logo) => set({ logo }),
+  setTema: (tema) => set({ tema }),
 
-  // 2. CREAMOS LA FUNCIÓN REAL
   loadConfig: async () => {
-    try {
-      // Acá idealmente llamarías a tu base de datos para traer el dólar real.
-      // Ejemplo: 
-      // const configDB = await obtenerConfiguracion();
-      // if (configDB) set({ dolarBlue: configDB.valor_dolar });
-
-      console.log("Configuración inicializada correctamente");
-    } catch (error) {
-      console.error("Error al cargar la configuración:", error);
-    }
+    // Aquí iría tu lógica actual de carga...
+    console.log("Store configurado con logo y tema");
   }
 }));

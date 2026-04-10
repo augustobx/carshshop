@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useConfigStore } from '@/store/useConfigStore';
 import {
   Car,
   LayoutDashboard,
@@ -18,13 +19,14 @@ import {
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { logo } = useConfigStore(); // Traemos el logo del estado global
 
   // Definimos todas las rutas del sistema
   const menuItems = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Vehículos', href: '/vehiculos', icon: Car },
     { name: 'Ventas y Cotizador', href: '/ventas', icon: BadgeDollarSign },
-    { name: 'Cobranzas y Cuotas', href: '/cuotas', icon: CalendarClock }, // <-- AQUÍ ESTÁ EL NUEVO MÓDULO
+    { name: 'Cobranzas y Cuotas', href: '/cuotas', icon: CalendarClock },
     { name: 'Préstamos', href: '/prestamos', icon: HandCoins },
     { name: 'Caja y Gastos', href: '/caja', icon: Wallet },
     { name: 'Clientes', href: '/clientes', icon: Users },
@@ -33,12 +35,18 @@ export default function Sidebar() {
   ];
 
   return (
-    <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col h-screen shrink-0 border-r border-slate-800 transition-all">
-      {/* Logo */}
-      <div className="h-16 flex items-center px-6 border-b border-slate-800">
-        <Link href="/" className="flex items-center gap-2 text-white hover:text-indigo-400 transition-colors">
-          <Car className="w-6 h-6 text-indigo-500" />
-          <span className="font-black text-xl tracking-tight">CarShop<span className="text-indigo-500">ERP</span></span>
+    <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col h-screen shrink-0 border-r border-slate-800 transition-all z-50">
+      {/* Logo Dinámico */}
+      <div className="h-16 flex items-center px-6 border-b border-slate-800 overflow-hidden bg-slate-950/30">
+        <Link href="/" className="flex items-center justify-center gap-2 transition-colors w-full h-full py-3">
+          {logo ? (
+            <img src={logo} alt="Logo Empresa" className="max-h-full max-w-full object-contain drop-shadow-md" />
+          ) : (
+            <>
+              <Car className="w-6 h-6 text-indigo-500 shrink-0" />
+              <span className="font-black text-xl tracking-tight text-white">CarShop<span className="text-indigo-500">ERP</span></span>
+            </>
+          )}
         </Link>
       </div>
 
@@ -48,15 +56,16 @@ export default function Sidebar() {
 
         {menuItems.map((item) => {
           const Icon = item.icon;
-          // Verificamos si la ruta actual coincide con la del botón para pintarlo de "Activo"
           const isActive = pathname === item.href || (pathname.startsWith(item.href) && item.href !== '/');
 
           return (
             <Link
               key={item.href}
               href={item.href}
+              // Usamos style en línea para inyectar la variable CSS de tu marca de forma segura
+              style={isActive ? { backgroundColor: 'var(--color-brand, #4f46e5)', color: 'white' } : {}}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${isActive
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/20'
+                  ? 'shadow-md shadow-black/20'
                   : 'hover:bg-slate-800 hover:text-white'
                 }`}
             >
@@ -71,10 +80,13 @@ export default function Sidebar() {
       <div className="p-4 border-t border-slate-800 space-y-1 bg-slate-900/50">
         <Link
           href="/configuracion"
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${pathname.startsWith('/configuracion') ? 'bg-slate-800 text-white' : 'hover:bg-slate-800 hover:text-white'
+          style={pathname.startsWith('/configuracion') ? { backgroundColor: 'var(--color-brand, #4f46e5)', color: 'white' } : {}}
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${pathname.startsWith('/configuracion')
+              ? 'shadow-md shadow-black/20'
+              : 'hover:bg-slate-800 hover:text-white'
             }`}
         >
-          <Settings className="w-5 h-5 text-slate-400" />
+          <Settings className={`w-5 h-5 ${pathname.startsWith('/configuracion') ? 'text-white' : 'text-slate-400'}`} />
           Configuración
         </Link>
 
