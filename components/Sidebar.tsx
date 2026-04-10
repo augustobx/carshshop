@@ -36,9 +36,11 @@ export default function Sidebar() {
   ];
 
   return (
-    <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col h-screen shrink-0 border-r border-slate-800 transition-all z-50">
-      {/* Logo Dinámico */}
-      <div className="h-16 flex items-center px-6 border-b border-slate-800 overflow-hidden bg-slate-950/30">
+    {/* 1. AGREGAMOS "sticky top-0" PARA QUE EL MENÚ NO SE CORTE NUNCA AL BAJAR */ }
+    < aside className = "w-64 bg-slate-900 text-slate-300 flex flex-col sticky top-0 h-screen shrink-0 border-r border-slate-800 transition-all z-50" >
+
+      {/* Logo Dinámico (Fijamos su alto con shrink-0 para que no se aplaste) */ }
+      < div className = "h-20 flex items-center px-6 border-b border-slate-800 overflow-hidden bg-slate-950/30 shrink-0" >
         <Link href="/" className="flex items-center justify-center gap-2 transition-colors w-full h-full py-3">
           {logo ? (
             <img src={logo} alt="Logo Empresa" className="max-h-full max-w-full object-contain drop-shadow-md" />
@@ -49,52 +51,54 @@ export default function Sidebar() {
             </>
           )}
         </Link>
-      </div>
+      </div >
 
-      {/* Menú Principal */}
-      <div className="flex-1 overflow-y-auto py-6 px-4 space-y-1 custom-scrollbar">
-        <p className="px-2 text-xs font-black text-slate-500 uppercase tracking-wider mb-4">Menú Principal</p>
+    {/* Menú Principal */ }
+  {/* 2. CAMBIAMOS "space-y-1" POR "space-y-2.5" PARA SEPARAR MÁS LOS BOTONES ENTRE SÍ */ }
+  <div className="flex-1 overflow-y-auto py-6 px-4 space-y-2.5 custom-scrollbar">
+    <p className="px-3 text-[10px] font-black text-slate-500 uppercase tracking-widest mb-5">Menú Principal</p>
 
-        {menuItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = pathname === item.href || (pathname.startsWith(item.href) && item.href !== '/');
+    {menuItems.map((item) => {
+      const Icon = item.icon;
+      const isActive = pathname === item.href || (pathname.startsWith(item.href) && item.href !== '/');
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              style={isActive ? { backgroundColor: 'var(--color-brand, #4f46e5)', color: 'white' } : {}}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${isActive
-                  ? 'shadow-md shadow-black/20'
-                  : 'hover:bg-slate-800 hover:text-white'
-                }`}
-            >
-              <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-              {item.name}
-            </Link>
-          );
-        })}
-      </div>
-
-      {/* Configuración y Perfil (Abajo) */}
-      <div className="p-4 border-t border-slate-800 space-y-1 bg-slate-900/50">
+      return (
         <Link
-          href="/configuracion"
-          style={pathname.startsWith('/configuracion') ? { backgroundColor: 'var(--color-brand, #4f46e5)', color: 'white' } : {}}
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${pathname.startsWith('/configuracion')
-              ? 'shadow-md shadow-black/20'
-              : 'hover:bg-slate-800 hover:text-white'
+          key={item.href}
+          href={item.href}
+          style={isActive ? { backgroundColor: 'var(--color-brand, #4f46e5)', color: 'white' } : {}}
+          /* 3. AUMENTAMOS EL PADDING (px-4 py-3.5) PARA HACER LOS BOTONES MÁS ALTOS Y CÓMODOS */
+          className={`flex items-center gap-3.5 px-4 py-3.5 rounded-xl text-sm font-bold transition-all duration-200 ${isActive
+              ? 'shadow-lg shadow-black/20 scale-[1.02]'
+              : 'hover:bg-slate-800 hover:text-white hover:scale-[1.01]'
             }`}
         >
-          <Settings className={`w-5 h-5 ${pathname.startsWith('/configuracion') ? 'text-white' : 'text-slate-400'}`} />
-          Configuración
+          <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+          {item.name}
         </Link>
+      );
+    })}
+  </div>
 
-        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-red-400 hover:bg-red-950/30 hover:text-red-300 transition-colors">
-          <LogOut className="w-5 h-5" />
-          Cerrar Sesión
-        </button>
-      </div>
-    </aside>
+  {/* Configuración y Perfil (Abajo Fijo) */ }
+  <div className="p-5 border-t border-slate-800 space-y-3 bg-slate-900/50 shrink-0">
+    <Link
+      href="/configuracion"
+      style={pathname.startsWith('/configuracion') ? { backgroundColor: 'var(--color-brand, #4f46e5)', color: 'white' } : {}}
+      className={`flex items-center gap-3.5 px-4 py-3.5 rounded-xl text-sm font-bold transition-all duration-200 ${pathname.startsWith('/configuracion')
+          ? 'shadow-lg shadow-black/20 scale-[1.02]'
+          : 'hover:bg-slate-800 hover:text-white hover:scale-[1.01]'
+        }`}
+    >
+      <Settings className={`w-5 h-5 ${pathname.startsWith('/configuracion') ? 'text-white' : 'text-slate-400'}`} />
+      Configuración
+    </Link>
+
+    <button className="w-full flex items-center gap-3.5 px-4 py-3.5 rounded-xl text-sm font-bold text-red-400 hover:bg-red-950/40 hover:text-red-300 transition-colors">
+      <LogOut className="w-5 h-5" />
+      Cerrar Sesión
+    </button>
+  </div>
+    </aside >
   );
 }
