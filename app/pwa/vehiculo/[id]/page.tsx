@@ -4,8 +4,13 @@ import { notFound } from "next/navigation";
 
 export default async function PWAVehiculoPage({ params }: { params: Promise<{ id: string }> }) {
     const resolvedParams = await params;
+
+    // Agregamos el "include" para traer el historial de notas y sus autores
     const vehiculoDb = await db.vehiculo.findUnique({
-        where: { id_vehiculo: parseInt(resolvedParams.id) }
+        where: { id_vehiculo: parseInt(resolvedParams.id) },
+        include: {
+            anotaciones: { include: { usuario: true }, orderBy: { fecha: 'desc' } }
+        }
     });
 
     if (!vehiculoDb) return notFound();
