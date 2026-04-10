@@ -29,16 +29,15 @@ export default function CotizadorClient({ vehiculos, clientes }: { vehiculos: an
 
     const [cantCuotas, setCantCuotas] = useState('12');
 
-    // Inicia con 1 mes exacto por delante
     const [fechaPrimerCuota, setFechaPrimerCuota] = useState(() => {
         const hoy = new Date();
-        let m = hoy.getMonth() + 2; // +1 por base 0, +1 para el próximo mes
+        let m = hoy.getMonth() + 2;
         let y = hoy.getFullYear();
         if (m > 12) { m -= 12; y += 1; }
         return `${y}-${String(m).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
     });
 
-    const [tnaAnual, setTnaAnual] = useState('48');
+    const [tnaAnual, setTnaAnual] = useState('36');
     const [interesDirecto, setInteresDirecto] = useState('');
 
     useEffect(() => {
@@ -75,11 +74,12 @@ export default function CotizadorClient({ vehiculos, clientes }: { vehiculos: an
     let totalFinanciadoArs = 0;
     let rentabilidadFinancieraArs = 0;
 
+    // NOVO CÁLCULO DIRETO (Saldo + % / Cuotas)
     if (formaPago === 'Cuotas' && saldoAFinanciarArs > 0) {
         if (tnaAnual && parseFloat(tnaAnual) > 0) {
-            const r = (parseFloat(tnaAnual) / 100) / 12;
-            valorCuotaArs = (saldoAFinanciarArs * r * Math.pow(1 + r, cuotasN)) / (Math.pow(1 + r, cuotasN) - 1);
-            totalFinanciadoArs = valorCuotaArs * cuotasN;
+            const recargoTotal = saldoAFinanciarArs * (parseFloat(tnaAnual) / 100);
+            totalFinanciadoArs = saldoAFinanciarArs + recargoTotal;
+            valorCuotaArs = totalFinanciadoArs / cuotasN;
         }
         else if (interesDirecto && parseFloat(interesDirecto) > 0) {
             const intDirecto = parseFloat(interesDirecto) / 100;
@@ -108,19 +108,16 @@ export default function CotizadorClient({ vehiculos, clientes }: { vehiculos: an
         let planDePagos: any[] = [];
         if (formaPago === 'Cuotas') {
             planDePagos = Array.from({ length: cuotasN }).map((_, i) => {
-                // LA SOLUCIÓN DEFINITIVA: Matemática pura, sin que Javascript calcule husos horarios
                 const partes = fechaPrimerCuota.split('-');
                 let year = parseInt(partes[0]);
                 let month = parseInt(partes[1]) + i;
                 const originalDay = parseInt(partes[2]);
 
-                // Si pasamos de diciembre, avanzamos de año
                 while (month > 12) {
                     month -= 12;
                     year += 1;
                 }
 
-                // Evita que el día 31 caiga en febrero o meses de 30 días
                 const diasDelMes = new Date(year, month, 0).getDate();
                 const diaSeguro = Math.min(originalDay, diasDelMes);
 
@@ -131,7 +128,6 @@ export default function CotizadorClient({ vehiculos, clientes }: { vehiculos: an
                 return {
                     numero_cuota: i + 1,
                     monto_usd: cuotaUsd,
-                    // Armamos el texto exacto e inyectamos el mediodía universal
                     fecha_vencimiento: `${yStr}-${mStr}-${dStr}T12:00:00Z`
                 };
             });
@@ -287,19 +283,11 @@ export default function CotizadorClient({ vehiculos, clientes }: { vehiculos: an
                                 </div>
                             </div>
                             <div className="pt-4 border-t border-slate-100">
-                                <h4 className="text-sm font-bold text-slate-700 mb-4">Tasas de Financiación</h4>
+                                <h4 className="text-sm font-bold text-slate-700 mb-4">Tasas de Financiación (Interés Directo)</h4>
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                     <div>
-                                        <label className="text-[10px] font-bold text-slate-500 uppercase">TNA Anual (%)</label>
-                                        <input type="number" step="any" value={tnaAnual} onChange={e => { setTnaAnual(e.target.value); setInteresDirecto('') }} className="w-full p-2 border border-slate-300 rounded-lg text-sm font-bold text-indigo-700" placeholder="Ej: 48" />
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-bold text-slate-500 uppercase">TNA Mensual (%)</label>
-                                        <input type="number" value={tnaAnual ? (parseFloat(tnaAnual) / 12).toFixed(2) : ''} disabled className="w-full p-2 border border-slate-200 bg-slate-50 rounded-lg text-sm text-slate-400" />
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-bold text-slate-500 uppercase">% Int. Directo</label>
-                                        <input type="number" step="any" value={interesDirecto} onChange={e => { setInteresDirecto(e.target.value); setTnaAnual('') }} className="w-full p-2 border border-slate-300 rounded-lg text-sm" placeholder="Opcional" />
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase">% Recargo Total</label>
+                                        <input type="number" step="any" value={tnaAnual} onChange={e => { setTnaAnual(e.target.value); setInteresDirecto('') }} className="w-full p-2 border border-slate-300 rounded-lg text-sm font-bold text-indigo-700" placeholder="Ej: 36" />
                                     </div>
                                 </div>
                             </div>

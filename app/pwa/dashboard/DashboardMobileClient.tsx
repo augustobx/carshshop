@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Search, CarFront, Calculator, ChevronRight, LayoutGrid } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Search, Calculator, LayoutGrid, ArrowLeft } from 'lucide-react';
 
 export default function DashboardMobileClient({ vehiculos }: { vehiculos: any[] }) {
     const formatMoney = (amount: number) => amount.toLocaleString('es-AR', { maximumFractionDigits: 0 });
+    const router = useRouter();
     const [searchTerm, setSearchTerm] = useState('');
 
     const filtrados = vehiculos.filter(v =>
@@ -14,12 +16,16 @@ export default function DashboardMobileClient({ vehiculos }: { vehiculos: any[] 
 
     return (
         <div className="min-h-screen bg-slate-50 pb-24 font-sans">
-            {/* APP BAR FIJA */}
             <header className="bg-slate-900 text-white sticky top-0 z-50 shadow-md px-4 py-5 rounded-b-3xl">
-                <div className="flex justify-between items-center mb-4">
-                    <h1 className="text-2xl font-black tracking-tight">Stock en Salón</h1>
-                    <div className="bg-slate-800 px-3 py-1.5 rounded-full text-xs font-bold text-slate-300">
-                        {vehiculos.length} Autos
+                <div className="flex items-center gap-3 mb-4">
+                    <button onClick={() => router.back()} className="p-2 -ml-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all">
+                        <ArrowLeft className="w-5 h-5 text-white" />
+                    </button>
+                    <div className="flex-1 flex justify-between items-center">
+                        <h1 className="text-2xl font-black tracking-tight">Stock en Salón</h1>
+                        <div className="bg-slate-800 px-3 py-1.5 rounded-full text-xs font-bold text-slate-300">
+                            {vehiculos.length} Autos
+                        </div>
                     </div>
                 </div>
                 <div className="relative">
@@ -63,7 +69,6 @@ export default function DashboardMobileClient({ vehiculos }: { vehiculos: any[] 
                 )}
             </main>
 
-            {/* NAVEGACIÓN INFERIOR (BOTTOM TAB BAR) */}
             <nav className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 px-6 py-3 pb-safe flex justify-around items-center shadow-[0_-10px_20px_rgba(0,0,0,0.03)] z-50">
                 <Link href="/pwa/dashboard" className="flex flex-col items-center text-indigo-600">
                     <LayoutGrid className="w-6 h-6 mb-1" />

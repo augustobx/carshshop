@@ -4,36 +4,31 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useConfigStore } from '@/store/useConfigStore';
 import { registrarVenta } from '@/actions/ventas';
-import { Car, User, Banknote, Calculator, ChevronRight, CheckCircle2, Loader2, ArrowRight, X } from 'lucide-react';
+import { Calculator, ArrowLeft, ArrowRight, Banknote, CheckCircle2, Loader2, X } from 'lucide-react';
 
 export default function CotizadorMobileClient({ vehiculos, clientes }: { vehiculos: any[], clientes: any[] }) {
     const formatMoney = (amount: number) => amount.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
     const router = useRouter();
     const { dolarBlue } = useConfigStore();
 
-    // Estados
     const [step, setStep] = useState(1);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Selecciones
     const [vSeleccionado, setVSeleccionado] = useState<any>(null);
     const [cSeleccionado, setCSeleccionado] = useState<any>(null);
     const [formaPago, setFormaPago] = useState<'Contado' | 'Cuotas'>('Contado');
 
-    // Finanzas (Todo en ARS)
     const [precioArs, setPrecioArs] = useState('');
     const [anticipoArs, setAnticipoArs] = useState('');
     const [cantCuotas, setCantCuotas] = useState('12');
-    const [tnaAnual, setTnaAnual] = useState('48');
+    const [tnaAnual, setTnaAnual] = useState('36'); // Utilizado como % de recargo total
 
-    // Autocompletar precio cuando elige auto
     useEffect(() => {
         if (vSeleccionado) {
             setPrecioArs(vSeleccionado.precio_venta_ars?.toString() || '');
         }
     }, [vSeleccionado]);
 
-    // Cálculos en Tiempo Real
     const pFinalArs = parseFloat(precioArs) || 0;
     const antArs = parseFloat(anticipoArs) || 0;
     const saldoAFinanciarArs = Math.max(0, pFinalArs - antArs);
@@ -42,12 +37,13 @@ export default function CotizadorMobileClient({ vehiculos, clientes }: { vehicul
     let valorCuotaArs = 0;
     let totalFinanciadoArs = 0;
 
+    // CÁLCULO DE TAXA DIRETA NA PWA
     if (formaPago === 'Cuotas' && saldoAFinanciarArs > 0) {
         const tna = parseFloat(tnaAnual) || 0;
         if (tna > 0) {
-            const r = (tna / 100) / 12;
-            valorCuotaArs = (saldoAFinanciarArs * r * Math.pow(1 + r, cuotasN)) / (Math.pow(1 + r, cuotasN) - 1);
-            totalFinanciadoArs = valorCuotaArs * cuotasN;
+            const recargoTotal = saldoAFinanciarArs * (tna / 100);
+            totalFinanciadoArs = saldoAFinanciarArs + recargoTotal;
+            valorCuotaArs = totalFinanciadoArs / cuotasN;
         } else {
             valorCuotaArs = saldoAFinanciarArs / cuotasN;
             totalFinanciadoArs = saldoAFinanciarArs;
@@ -66,12 +62,12 @@ export default function CotizadorMobileClient({ vehiculos, clientes }: { vehicul
             planDePagos = Array.from({ length: cuotasN }).map((_, i) => {
                 const hoy = new Date();
                 let year = hoy.getFullYear();
-                let month = hoy.getMonth() + 2 + i; // Arranca el mes que viene
+                let month = hoy.getMonth() + 2 + i;
                 while (month > 12) { month -= 12; year += 1; }
 
                 const yStr = year.toString();
                 const mStr = month.toString().padStart(2, '0');
-                const dStr = "10"; // Vencimiento los 10 de cada mes por defecto en la PWA
+                const dStr = "10";
 
                 return {
                     numero_cuota: i + 1,
@@ -92,7 +88,7 @@ export default function CotizadorMobileClient({ vehiculos, clientes }: { vehicul
 
         if (res.success) {
             alert('¡Operación cerrada con éxito!');
-            router.push('/pwa/dashboard'); // O a donde quieras mandarlo
+            router.push('/pwa/dashboard');
         } else {
             alert(res.error);
         }
@@ -101,25 +97,26 @@ export default function CotizadorMobileClient({ vehiculos, clientes }: { vehicul
 
     return (
         <div className="min-h-screen bg-slate-50 pb-24 font-sans">
-            {/* APP BAR FIJA */}
             <header className="bg-indigo-600 text-white sticky top-0 z-50 shadow-md">
                 <div className="px-4 py-4 flex items-center justify-between">
-                    <h1 className="text-xl font-black tracking-tight flex items-center gap-2">
-                        <Calculator className="w-5 h-5 text-indigo-200" /> Cotizador
-                    </h1>
+                    <div className="flex items-center gap-3">
+                        <button onClick={() => router.back()} className="p-2 -ml-2 bg-indigo-500 hover:bg-indigo-400 rounded-xl transition-all">
+                            <ArrowLeft className="w-5 h-5" />
+                        </button>
+                        <h1 className="text-xl font-black tracking-tight flex items-center gap-2">
+                            Cotizador
+                        </h1>
+                    </div>
                     <div className="bg-indigo-800/50 px-3 py-1 rounded-full text-xs font-bold border border-indigo-500">
                         USD: $ {dolarBlue}
                     </div>
                 </div>
-                {/* PROGRESS BAR */}
                 <div className="flex h-1.5 bg-indigo-900">
                     <div className="bg-emerald-400 h-full transition-all duration-300" style={{ width: `${(step / 3) * 100}%` }} />
                 </div>
             </header>
 
             <main className="p-4 space-y-4">
-
-                {/* PASO 1: SELECCIÓN */}
                 {step === 1 && (
                     <div className="space-y-4 animate-in slide-in-from-right-4 fade-in">
                         <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
@@ -168,7 +165,6 @@ export default function CotizadorMobileClient({ vehiculos, clientes }: { vehicul
                     </div>
                 )}
 
-                {/* PASO 2: FINANZAS */}
                 {step === 2 && (
                     <div className="space-y-4 animate-in slide-in-from-right-4 fade-in">
                         <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 space-y-5">
@@ -215,8 +211,8 @@ export default function CotizadorMobileClient({ vehiculos, clientes }: { vehicul
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">TNA (%)</label>
-                                        <input type="number" step="any" value={tnaAnual} onChange={e => setTnaAnual(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-lg outline-none" />
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">% Recargo Total</label>
+                                        <input type="number" step="any" value={tnaAnual} onChange={e => setTnaAnual(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-lg outline-none" placeholder="Ex: 36" />
                                     </div>
                                 </div>
                             </div>
@@ -224,7 +220,6 @@ export default function CotizadorMobileClient({ vehiculos, clientes }: { vehicul
                     </div>
                 )}
 
-                {/* PASO 3: RESUMEN PREMIUM PARA MOSTRAR AL CLIENTE */}
                 {step === 3 && (
                     <div className="animate-in slide-in-from-right-4 fade-in">
                         <div className="bg-slate-900 rounded-[2rem] p-6 shadow-2xl border border-slate-800 text-white relative overflow-hidden">
@@ -270,7 +265,6 @@ export default function CotizadorMobileClient({ vehiculos, clientes }: { vehicul
                 )}
             </main>
 
-            {/* BOTONERA FLOTANTE INFERIOR (ESTILO APP) */}
             <div className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 p-4 pb-safe flex gap-3 shadow-[0_-10px_20px_rgba(0,0,0,0.05)]">
                 {step > 1 && (
                     <button
