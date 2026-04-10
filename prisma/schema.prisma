@@ -14,6 +14,7 @@ model Usuario {
   password   String
   rol        RolUsuario
   ventas     Venta[]
+  anotaciones Anotacion[]
 }
 
 model Cliente {
@@ -72,6 +73,7 @@ model VehiculoFoto {
 model Anotacion {
   id_anotacion Int      @id @default(autoincrement())
   id_vehiculo  Int
+  id_usuario   Int?
   texto        String   @db.Text
   fecha        DateTime @default(now())
   vehiculo     Vehiculo @relation(fields: [id_vehiculo], references: [id_vehiculo], onDelete: Cascade)
