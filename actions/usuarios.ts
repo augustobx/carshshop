@@ -28,3 +28,13 @@ export async function crearUsuario(data: { nombre: string, email: string, passwo
         return { success: false, error: 'Error al crear usuario.' };
     }
 }
+
+export async function eliminarUsuario(id_usuario: number) {
+    try {
+        await db.usuario.delete({ where: { id_usuario } });
+        revalidatePath('/usuarios');
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: 'No se puede eliminar el usuario. Es probable que tenga ventas o acciones asociadas en el sistema.' };
+    }
+}

@@ -11,10 +11,7 @@ export default withAuth(
             return NextResponse.redirect(new URL("/pwa", req.url));
         }
 
-        // 2. Si un ADMIN intenta entrar a la PWA por error, lo mandamos al ERP (Opcional, podés borrar esto si el admin también usa la PWA)
-        if (token?.rol === "Admin" && path.startsWith("/pwa/dashboard")) {
-            return NextResponse.redirect(new URL("/", req.url));
-        }
+        // 2. Eliminamos la restricción del Admin. Ahora el Admin puede usar tanto el ERP como la PWA libremente.
     },
     {
         callbacks: {

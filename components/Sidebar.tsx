@@ -14,14 +14,14 @@ import {
   LogOut,
   FileText,
   Wallet,
-  CarFront
+  CarFront,
+  ShieldCheck
 } from 'lucide-react';
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { logo } = useConfigStore(); // Traemos el logo del estado global
+  const { logo } = useConfigStore();
 
-  // Definimos todas las rutas del sistema
   const menuItems = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Vehículos', href: '/vehiculos', icon: Car },
@@ -32,6 +32,7 @@ export default function Sidebar() {
     { name: 'Clientes', href: '/clientes', icon: Users },
     { name: 'Consignaciones', href: '/consignaciones', icon: CarFront },
     { name: 'Documentos', href: '/documentos', icon: FileText },
+    { name: 'Usuarios y Accesos', href: '/usuarios', icon: ShieldCheck },
   ];
 
   return (
@@ -62,7 +63,6 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              // Usamos style en línea para inyectar la variable CSS de tu marca de forma segura
               style={isActive ? { backgroundColor: 'var(--color-brand, #4f46e5)', color: 'white' } : {}}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${isActive
                   ? 'shadow-md shadow-black/20'
