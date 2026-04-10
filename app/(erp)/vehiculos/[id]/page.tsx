@@ -16,7 +16,7 @@ export default async function DetalleVehiculoPage({ params }: { params: Promise<
         where: { id_vehiculo: idVehiculo },
         include: {
             tareas: { include: { gastos: true }, orderBy: { id_tarea: 'desc' } },
-            senias: { include: { cliente: true }, orderBy: { id_senia: 'desc' } } // <-- AGREGAR ESTO
+            senias: { include: { cliente: true }, orderBy: { id_senia: 'desc' } }, // <-- AGREGAR ESTO
             anotaciones: { include: { usuario: true }, orderBy: { fecha: 'desc' } }
         }
     });
