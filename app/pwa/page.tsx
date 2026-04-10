@@ -1,22 +1,33 @@
 'use client';
 
 import Link from 'next/link';
-import { CarFront, Calculator, ClipboardList, UserCircle, ArrowRight } from 'lucide-react';
+import { CarFront, Calculator, LayoutGrid, UserCircle, ArrowRight } from 'lucide-react';
+import { useConfigStore } from '@/store/useConfigStore';
 
 export default function PWARootPage() {
+    const { logo } = useConfigStore(); // Obtenemos el logo cargado por el Splash
+
     return (
-        <div className="flex flex-col min-h-screen p-6 justify-between bg-slate-900 text-white overflow-hidden">
-            {/* Fondo Decorativo */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600 rounded-full blur-[120px] opacity-20 -translate-y-1/2 translate-x-1/2"></div>
+        <div className="flex flex-col min-h-screen p-6 justify-between bg-slate-900 text-white overflow-hidden relative">
+            {/* Fondo Decorativo dinámico con el color de la marca */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-[var(--color-brand,#4f46e5)] rounded-full blur-[120px] opacity-20 -translate-y-1/2 translate-x-1/2"></div>
 
             {/* Header / Logo */}
             <div className="relative z-10 pt-10">
-                <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-indigo-500/20">
-                    <CarFront className="w-10 h-10 text-white" />
-                </div>
-                <h1 className="text-4xl font-black tracking-tighter">
-                    Carsh<span className="text-indigo-500">Shop</span>
-                </h1>
+                {logo ? (
+                    <div className="h-20 flex justify-start items-center mb-6">
+                        <img src={logo} alt="Logo" className="max-h-full max-w-full object-contain drop-shadow-lg" />
+                    </div>
+                ) : (
+                    <>
+                        <div className="w-16 h-16 bg-[var(--color-brand,#4f46e5)] rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-[var(--color-brand)]/20">
+                            <CarFront className="w-10 h-10 text-white" />
+                        </div>
+                        <h1 className="text-4xl font-black tracking-tighter">
+                            CarShop<span className="text-[var(--color-brand,#4f46e5)]">ERP</span>
+                        </h1>
+                    </>
+                )}
                 <p className="text-slate-400 font-medium mt-2 text-lg">Panel de Vendedores</p>
             </div>
 
@@ -24,20 +35,20 @@ export default function PWARootPage() {
             <div className="relative z-10 space-y-4">
                 <Link href="/pwa/dashboard" className="group flex items-center justify-between p-6 bg-slate-800/50 border border-slate-700 rounded-[2rem] hover:bg-slate-800 transition-all active:scale-95">
                     <div className="flex items-center gap-4">
-                        <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400">
-                            <LayoutGridIcon className="w-6 h-6" />
+                        <div className="p-3 bg-white/5 rounded-xl text-white">
+                            <LayoutGrid className="w-6 h-6" />
                         </div>
                         <div>
                             <p className="font-black text-xl">Stock en Vivo</p>
                             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Ver catálogo</p>
                         </div>
                     </div>
-                    <ArrowRight className="w-6 h-6 text-slate-600 group-hover:text-indigo-400 transition-colors" />
+                    <ArrowRight className="w-6 h-6 text-slate-600 group-hover:text-[var(--color-brand,#4f46e5)] transition-colors" />
                 </Link>
 
                 <Link href="/pwa/cotizador" className="group flex items-center justify-between p-6 bg-slate-800/50 border border-slate-700 rounded-[2rem] hover:bg-slate-800 transition-all active:scale-95">
                     <div className="flex items-center gap-4">
-                        <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400">
+                        <div className="p-3 bg-white/5 rounded-xl text-white">
                             <Calculator className="w-6 h-6" />
                         </div>
                         <div>
@@ -60,17 +71,5 @@ export default function PWARootPage() {
                 </div>
             </div>
         </div>
-    );
-}
-
-// Icono auxiliar para el diseño
-function LayoutGridIcon(props: any) {
-    return (
-        <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect width="7" height="7" x="3" y="3" rx="1" />
-            <rect width="7" height="7" x="14" y="3" rx="1" />
-            <rect width="7" height="7" x="14" y="14" rx="1" />
-            <rect width="7" height="7" x="3" y="14" rx="1" />
-        </svg>
     );
 }
