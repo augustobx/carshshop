@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { CarFront, Calculator, LayoutGrid, UserCircle, ArrowRight } from 'lucide-react';
+import { CarFront, Calculator, LayoutGrid, UserCircle, ArrowRight, LogOut } from 'lucide-react';
 import { useConfigStore } from '@/store/useConfigStore';
+import { signOut } from 'next-auth/react'; // Función mágica para cerrar sesión
 
 export default function PwaHomeClient({ userName }: { userName: string }) {
     const { logo } = useConfigStore();
@@ -17,10 +18,10 @@ export default function PwaHomeClient({ userName }: { userName: string }) {
                     </div>
                 ) : (
                     <>
-                        <div className="w-16 h-16 bg-[var(--color-brand,#4f46e5)] rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-[var(--color-brand)]/20">
+                        <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-black/20" style={{ backgroundColor: 'var(--color-brand)' }}>
                             <CarFront className="w-10 h-10 text-white" />
                         </div>
-                        <h1 className="text-4xl font-black tracking-tighter">CarShop<span className="text-[var(--color-brand,#4f46e5)]">ERP</span></h1>
+                        <h1 className="text-4xl font-black tracking-tighter">CarShop<span style={{ color: 'var(--color-brand)' }}>ERP</span></h1>
                     </>
                 )}
                 <p className="text-slate-400 font-medium mt-2 text-lg">Panel Comercial</p>
@@ -35,7 +36,7 @@ export default function PwaHomeClient({ userName }: { userName: string }) {
                             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Ver catálogo</p>
                         </div>
                     </div>
-                    <ArrowRight className="w-6 h-6 text-slate-600 group-hover:text-[var(--color-brand,#4f46e5)] transition-colors" />
+                    <ArrowRight className="w-6 h-6 text-slate-600 transition-colors group-hover:text-white" />
                 </Link>
 
                 <Link href="/pwa/cotizador" className="group flex items-center justify-between p-6 bg-slate-800/50 border border-slate-700 rounded-[2rem] hover:bg-slate-800 transition-all active:scale-95">
@@ -46,17 +47,26 @@ export default function PwaHomeClient({ userName }: { userName: string }) {
                             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Nueva operación</p>
                         </div>
                     </div>
-                    <ArrowRight className="w-6 h-6 text-slate-600 group-hover:text-emerald-400 transition-colors" />
+                    <ArrowRight className="w-6 h-6 text-slate-600 transition-colors group-hover:text-white" />
                 </Link>
             </div>
 
             <div className="relative z-10 pt-10 pb-6">
-                <div className="flex items-center gap-3 p-4 bg-slate-800/30 rounded-2xl border border-slate-700/50">
-                    <UserCircle className="w-10 h-10 text-[var(--color-brand,#4f46e5)]" />
-                    <div>
-                        <p className="text-sm font-black">{userName}</p>
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter">Sincronizado</p>
+                <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-3xl border border-slate-700/50">
+                    <div className="flex items-center gap-3">
+                        <UserCircle className="w-10 h-10" style={{ color: 'var(--color-brand)' }} />
+                        <div>
+                            <p className="text-sm font-black">{userName}</p>
+                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter">Sincronizado</p>
+                        </div>
                     </div>
+                    <button
+                        onClick={() => signOut({ callbackUrl: '/login' })}
+                        className="p-3 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-2xl transition-all active:scale-90"
+                        title="Cerrar Sesión"
+                    >
+                        <LogOut className="w-5 h-5" />
+                    </button>
                 </div>
             </div>
         </div>
