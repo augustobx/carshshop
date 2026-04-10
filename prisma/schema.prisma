@@ -79,7 +79,7 @@ model Anotacion {
 
 model Configuracion {
   clave String @id
-  valor String
+  valor String @db.LongText
 }
 
 model Venta {
