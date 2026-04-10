@@ -16,15 +16,20 @@ export default function DashboardMobileClient({ vehiculos }: { vehiculos: any[] 
 
     return (
         <div className="min-h-screen bg-slate-50 pb-24 font-sans">
-            <header className="bg-slate-900 text-white sticky top-0 z-50 shadow-md px-4 py-5 rounded-b-3xl">
-                <div className="flex items-center gap-3 mb-4">
+            <header className="bg-slate-900 text-white sticky top-0 z-50 shadow-md px-4 py-5 rounded-b-3xl mb-2">
+                <div className="flex items-center gap-3 mb-5">
                     <button onClick={() => router.back()} className="p-2 -ml-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all">
                         <ArrowLeft className="w-5 h-5 text-white" />
                     </button>
                     <div className="flex-1 flex justify-between items-center">
-                        <h1 className="text-2xl font-black tracking-tight">Stock en Salón</h1>
-                        <div className="bg-slate-800 px-3 py-1.5 rounded-full text-xs font-bold text-slate-300">
-                            {vehiculos.length} Autos
+                        <h1 className="text-2xl font-black tracking-tight">Stock</h1>
+                        <div className="flex items-center gap-2">
+                            <span className="bg-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border border-emerald-500/30">
+                                U$S {dolarBlue}
+                            </span>
+                            <div className="bg-slate-800 px-2.5 py-1 rounded-lg text-[10px] font-black text-slate-300 uppercase border border-slate-700">
+                                {vehiculos.length} Autos
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -33,7 +38,7 @@ export default function DashboardMobileClient({ vehiculos }: { vehiculos: any[] 
                     <input
                         type="text" placeholder="Buscar marca, modelo o patente..."
                         value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
-                        className="w-full bg-slate-800 text-white placeholder:text-slate-400 pl-12 pr-4 py-3.5 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                        className="w-full bg-slate-800 text-white placeholder:text-slate-400 pl-12 pr-4 py-3.5 rounded-2xl outline-none focus:ring-2 focus:ring-[var(--color-brand,#4f46e5)] font-medium transition-all"
                     />
                 </div>
             </header>

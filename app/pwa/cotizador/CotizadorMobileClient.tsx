@@ -97,22 +97,26 @@ export default function CotizadorMobileClient({ vehiculos, clientes }: { vehicul
 
     return (
         <div className="min-h-screen bg-slate-50 pb-24 font-sans">
-            <header className="bg-indigo-600 text-white sticky top-0 z-50 shadow-md">
-                <div className="px-4 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <button onClick={() => router.back()} className="p-2 -ml-2 bg-indigo-500 hover:bg-indigo-400 rounded-xl transition-all">
-                            <ArrowLeft className="w-5 h-5" />
-                        </button>
-                        <h1 className="text-xl font-black tracking-tight flex items-center gap-2">
-                            Cotizador
-                        </h1>
+            {/* APP BAR FIJA (PREMIUM DARK) */}
+            <header className="bg-slate-900 text-white sticky top-0 z-50 shadow-md rounded-b-3xl mb-4">
+                <div className="px-4 py-5">
+                    <div className="flex items-center justify-between mb-5">
+                        <div className="flex items-center gap-3">
+                            <button onClick={() => router.back()} className="p-2 -ml-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all">
+                                <ArrowLeft className="w-5 h-5 text-white" />
+                            </button>
+                            <h1 className="text-2xl font-black tracking-tight flex items-center gap-2">
+                                Cotizador
+                            </h1>
+                        </div>
+                        <div className="bg-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border border-emerald-500/30">
+                            U$S {dolarBlue}
+                        </div>
                     </div>
-                    <div className="bg-indigo-800/50 px-3 py-1 rounded-full text-xs font-bold border border-indigo-500">
-                        USD: $ {dolarBlue}
+                    {/* PROGRESS BAR */}
+                    <div className="flex h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div className="bg-[var(--color-brand,#4f46e5)] h-full transition-all duration-300" style={{ width: `${(step / 3) * 100}%` }} />
                     </div>
-                </div>
-                <div className="flex h-1.5 bg-indigo-900">
-                    <div className="bg-emerald-400 h-full transition-all duration-300" style={{ width: `${(step / 3) * 100}%` }} />
                 </div>
             </header>
 
