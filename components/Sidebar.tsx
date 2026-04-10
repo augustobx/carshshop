@@ -12,7 +12,6 @@ import {
   HandCoins,
   Settings,
   LogOut,
-  FileText,
   Wallet,
   CarFront,
   ShieldCheck
@@ -31,27 +30,25 @@ export default function Sidebar() {
     { name: 'Caja y Gastos', href: '/caja', icon: Wallet },
     { name: 'Clientes', href: '/clientes', icon: Users },
     { name: 'Consignaciones', href: '/consignaciones', icon: CarFront },
-    { name: 'Documentos', href: '/documentos', icon: FileText },
     { name: 'Usuarios y Accesos', href: '/usuarios', icon: ShieldCheck },
   ];
 
   return (
     <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col sticky top-0 h-screen shrink-0 border-r border-slate-800 transition-all z-50">
-      {/* Logo Dinámico */}
+
       <div className="h-20 flex items-center px-6 border-b border-slate-800 overflow-hidden bg-slate-950/30 shrink-0">
         <Link href="/" className="flex items-center justify-center gap-2 transition-colors w-full h-full py-3">
           {logo ? (
             <img src={logo} alt="Logo Empresa" className="max-h-full max-w-full object-contain drop-shadow-md" />
           ) : (
             <>
-              <Car className="w-6 h-6 text-indigo-500 shrink-0" />
-              <span className="font-black text-xl tracking-tight text-white">CarShop<span className="text-indigo-500">ERP</span></span>
+              <Car className="w-6 h-6 shrink-0" style={{ color: 'var(--color-brand, #4f46e5)' }} />
+              <span className="font-black text-xl tracking-tight text-white">CarShop<span style={{ color: 'var(--color-brand, #4f46e5)' }}>ERP</span></span>
             </>
           )}
         </Link>
       </div>
 
-      {/* Menú Principal */}
       <div className="flex-1 overflow-y-auto py-6 px-4 space-y-2.5 custom-scrollbar">
         <p className="px-3 text-[10px] font-black text-slate-500 uppercase tracking-widest mb-5">Menú Principal</p>
 
@@ -76,7 +73,6 @@ export default function Sidebar() {
         })}
       </div>
 
-      {/* Configuración y Perfil (Abajo) */}
       <div className="p-5 border-t border-slate-800 space-y-3 bg-slate-900/50 shrink-0">
         <Link
           href="/configuracion"
