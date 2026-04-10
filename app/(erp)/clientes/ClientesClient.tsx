@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import Link from 'next/link'; // <-- ACÁ ESTÁ LA IMPORTACIÓN QUE FALTABA
 import { Search, Plus, Users, UserRound, Phone, Mail, MapPin, Edit, Loader2, Save, X } from 'lucide-react';
 import { guardarCliente, actualizarCliente } from '@/actions/clientes';
 
