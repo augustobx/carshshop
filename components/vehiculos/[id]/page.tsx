@@ -1,4 +1,4 @@
-import { db } from "@/lib/prisma";
+import { prisma as db } from "@/lib/prisma";
 import VehiculoForm from "@/components/vehiculos/VehiculoForm";
 import { notFound } from "next/navigation";
 
