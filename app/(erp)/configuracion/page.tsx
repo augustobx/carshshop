@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react';
 import { useConfigStore } from '@/store/useConfigStore';
 import { updateConfig } from '@/actions/config';
-import { Settings, Save, Loader2, DollarSign, Image as ImageIcon, Palette } from 'lucide-react';
+import { Settings, Save, Loader2, DollarSign, Image as ImageIcon, Palette, Pipette } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function ConfiguracionPage() {
@@ -17,10 +17,11 @@ export default function ConfiguracionPage() {
     const [localLogo, setLocalLogo] = useState<string | null>(logo);
     const [paletas, setPaletas] = useState<any[]>([]);
     const [selectedPaleta, setSelectedPaleta] = useState<number>(0);
+    const [colorManual, setColorManual] = useState<string>('#ef4444'); // Rojo por defecto
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // EXTRACTOR DE COLOR DE LA IMAGEN
+    // EXTRACTOR DE COLOR MEJORADO (Ignora blancos y negros)
     const extractColor = (base64Img: string) => {
         const img = new Image();
         img.src = base64Img;
@@ -29,29 +30,47 @@ export default function ConfiguracionPage() {
             const ctx = canvas.getContext('2d');
             if (!ctx) return;
 
-            canvas.width = img.width; canvas.height = img.height;
-            ctx.drawImage(img, 0, 0);
+            // Achicamos la imagen para procesar más rápido
+            canvas.width = 100;
+            canvas.height = (img.height / img.width) * 100;
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
             const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-            let r = 0, g = 0, b = 0, count = 0;
+            let rSum = 0, gSum = 0, bSum = 0, count = 0;
 
-            // Muestreo de píxeles (saltamos de a 4 para RGB y alfa)
-            for (let i = 0; i < data.length; i += 16) {
-                if (data[i + 3] > 128) { // Solo si no es transparente
-                    r += data[i]; g += data[i + 1]; b += data[i + 2];
-                    count++;
+            for (let i = 0; i < data.length; i += 4) {
+                if (data[i + 3] > 128) { // Si no es transparente
+                    let r = data[i], g = data[i + 1], b = data[i + 2];
+
+                    // Filtramos colores grises, blancos y negros para buscar el color "Vibrante"
+                    const isGrey = Math.abs(r - g) < 25 && Math.abs(g - b) < 25 && Math.abs(r - b) < 25;
+                    const isTooDark = r < 50 && g < 50 && b < 50;
+                    const isTooLight = r > 240 && g > 240 && b > 240;
+
+                    if (!isGrey && !isTooDark && !isTooLight) {
+                        rSum += r; gSum += g; bSum += b;
+                        count++;
+                    }
                 }
             }
 
             if (count > 0) {
-                r = Math.floor(r / count); g = Math.floor(g / count); b = Math.floor(b / count);
-                generarTemas(r, g, b);
+                // Encontró un color vibrante (el rojo de tu logo)
+                const finalR = Math.floor(rSum / count);
+                const finalG = Math.floor(gSum / count);
+                const finalB = Math.floor(bSum / count);
+                generarTemas(finalR, finalG, finalB);
+                setColorManual(`#${toHex(finalR)}${toHex(finalG)}${toHex(finalB)}`);
+            } else {
+                // Si el logo es literalmente solo blanco y negro, usamos un rojo por defecto para que no quede gris
+                generarTemas(220, 38, 38);
             }
         };
     };
 
+    const toHex = (c: number) => c.toString(16).padStart(2, '0');
+
     const generarTemas = (r: number, g: number, b: number) => {
-        const toHex = (c: number) => c.toString(16).padStart(2, '0');
         const mainHex = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 
         // Oscurecer para el hover
@@ -63,13 +82,23 @@ export default function ConfiguracionPage() {
         const ringHex = `#${toHex(lighten(r, 60))}${toHex(lighten(g, 60))}${toHex(lighten(b, 60))}`;
 
         const temasGenerados = [
-            { nombre: 'Tema 1 (Original)', primary: mainHex, hover: hoverHex, ring: ringHex },
-            { nombre: 'Tema 2 (Oscuro)', primary: hoverHex, hover: '#1e293b', ring: mainHex }, // Variante oscura
-            { nombre: 'Tema 3 (Pastel)', primary: ringHex, hover: mainHex, ring: hoverHex }    // Variante clara
+            { nombre: 'Tema Principal (Marca)', primary: mainHex, hover: hoverHex, ring: ringHex },
+            { nombre: 'Tema Oscuro (Elegante)', primary: '#0f172a', hover: mainHex, ring: hoverHex }, // Negro con hover rojo
+            { nombre: 'Tema Pastel (Suave)', primary: ringHex, hover: mainHex, ring: hoverHex }
         ];
 
         setPaletas(temasGenerados);
         setSelectedPaleta(0);
+    };
+
+    const handleColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const hex = e.target.value;
+        setColorManual(hex);
+        // Convertir HEX a RGB para recalcular paletas
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        generarTemas(r, g, b);
     };
 
     const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -122,9 +151,23 @@ export default function ConfiguracionPage() {
             <form onSubmit={handleSave} className="space-y-6">
                 {/* 1. BRANDING: LOGO Y COLORES */}
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex items-center gap-2">
-                        <Palette className="w-5 h-5 text-indigo-600" />
-                        <h2 className="text-lg font-bold text-slate-800">Identidad Visual</h2>
+                    <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Palette className="w-5 h-5 text-indigo-600" />
+                            <h2 className="text-lg font-bold text-slate-800">Identidad Visual</h2>
+                        </div>
+
+                        {/* SELECTOR MANUAL DE COLOR */}
+                        <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+                            <Pipette className="w-4 h-4 text-slate-400" />
+                            <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">Color Exacto:</span>
+                            <input
+                                type="color"
+                                value={colorManual}
+                                onChange={handleColorChange}
+                                className="w-6 h-6 rounded cursor-pointer border-0 p-0"
+                            />
+                        </div>
                     </div>
 
                     <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -153,7 +196,7 @@ export default function ConfiguracionPage() {
                             <label className="text-sm font-bold text-slate-700 uppercase tracking-wider block">Temas Generados</label>
                             {paletas.length === 0 ? (
                                 <div className="h-40 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-center">
-                                    <p className="text-sm text-slate-400 font-medium px-8 text-center">Subí un logo para que el sistema extraiga tus colores.</p>
+                                    <p className="text-sm text-slate-400 font-medium px-8 text-center">Subí un logo o usá el selector de arriba para generar tu paleta.</p>
                                 </div>
                             ) : (
                                 <div className="space-y-3">
@@ -173,14 +216,13 @@ export default function ConfiguracionPage() {
                     </div>
                 </div>
 
-                {/* 2. MOTOR BIMONETARIO (El que ya tenías) */}
+                {/* 2. MOTOR BIMONETARIO */}
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                     <div className="bg-emerald-50 px-6 py-4 border-b border-emerald-100 flex items-center gap-2">
                         <DollarSign className="w-5 h-5 text-emerald-600" />
                         <h2 className="text-lg font-bold text-emerald-900">Motor Bimonetario (Dólar)</h2>
                     </div>
                     <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 bg-white">
-                        {/* Tus select e inputs de dólar quedan exactamente igual que antes */}
                         <div className="space-y-2">
                             <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Referencia DolarAPI</label>
                             <select value={localTipo} onChange={(e) => setLocalTipo(e.target.value)} className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 font-medium">
@@ -197,7 +239,7 @@ export default function ConfiguracionPage() {
                 </div>
 
                 <div className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 p-4 px-6 flex justify-end z-50">
-                    <button type="submit" disabled={isSubmitting} className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3.5 rounded-xl font-black flex items-center gap-2 shadow-lg transition-all disabled:opacity-50">
+                    <button type="submit" disabled={isSubmitting} className="bg-[var(--color-brand,#4f46e5)] hover:bg-[var(--color-brand-hover,#4338ca)] text-white px-8 py-3.5 rounded-xl font-black flex items-center gap-2 shadow-lg transition-all disabled:opacity-50">
                         {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
                         Guardar Toda la Configuración
                     </button>
