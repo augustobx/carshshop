@@ -4,10 +4,15 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Search, Calculator, LayoutGrid, ArrowLeft } from 'lucide-react';
+import { useConfigStore } from '@/store/useConfigStore';
 
 export default function DashboardMobileClient({ vehiculos }: { vehiculos: any[] }) {
     const formatMoney = (amount: number) => amount.toLocaleString('es-AR', { maximumFractionDigits: 0 });
     const router = useRouter();
+
+    // Acá declaramos dolarBlue obteniéndolo de nuestra memoria global
+    const { dolarBlue } = useConfigStore();
+
     const [searchTerm, setSearchTerm] = useState('');
 
     const filtrados = vehiculos.filter(v =>
@@ -16,6 +21,7 @@ export default function DashboardMobileClient({ vehiculos }: { vehiculos: any[] 
 
     return (
         <div className="min-h-screen bg-slate-50 pb-24 font-sans">
+            {/* APP BAR FIJA (PREMIUM DARK) */}
             <header className="bg-slate-900 text-white sticky top-0 z-50 shadow-md px-4 py-5 rounded-b-3xl mb-2">
                 <div className="flex items-center gap-3 mb-5">
                     <button onClick={() => router.back()} className="p-2 -ml-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all">
