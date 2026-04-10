@@ -1,51 +1,64 @@
-import type { Metadata, Viewport } from "next";
-import { prisma as db } from "@/lib/prisma";
-import PWASplash from "./PWASplash";
+'use client';
 
-export const metadata: Metadata = {
-    title: "Carsh PWA - Vendedores",
-    description: "Gestión comercial móvil",
-};
+import { useState, useEffect } from 'react';
+import { useConfigStore } from '@/store/useConfigStore';
+import { CarFront } from 'lucide-react';
 
-export const viewport: Viewport = {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-    viewportFit: "cover",
-    themeColor: "#0f172a",
-};
+export default function PWASplash({
+    children,
+    logo,
+    initialDolar
+}: {
+    children: React.ReactNode;
+    logo: string | null;
+    initialDolar: number;
+}) {
+    const [showSplash, setShowSplash] = useState(true);
+    const { setLogo, setDolar } = useConfigStore();
 
-export default async function PWALayout({ children }: { children: React.ReactNode }) {
-    const cfgTema = await db.configuracion.findUnique({ where: { clave: 'empresa_tema' } });
-    const cfgLogo = await db.configuracion.findUnique({ where: { clave: 'empresa_logo' } });
-    const cfgDolar = await db.configuracion.findUnique({ where: { clave: 'dolar_actual' } });
+    useEffect(() => {
+        // Hidratamos el estado global con los datos que vienen del servidor
+        if (logo) setLogo(logo);
+        if (initialDolar) setDolar(initialDolar);
 
-    let themeStyles = null;
-    if (cfgTema && cfgTema.valor) {
-        try {
-            const tema = JSON.parse(cfgTema.valor);
-            themeStyles = `
-                :root {
-                    --color-brand: ${tema.primary};
-                    --color-brand-hover: ${tema.hover};
-                    --color-brand-ring: ${tema.ring};
-                }
-            `;
-        } catch (e) { }
-    }
-
-    const logoStr = cfgLogo ? cfgLogo.valor : null;
-    const initialDolar = cfgDolar ? parseFloat(cfgDolar.valor) : 1000;
+        // El splash dura 1.5 segundos y luego desaparece suavemente
+        const timer = setTimeout(() => setShowSplash(false), 1500);
+        return () => clearTimeout(timer);
+    }, [logo, initialDolar, setLogo, setDolar]);
 
     return (
-        <div className="min-h-screen bg-slate-900 text-slate-900 select-none antialiased">
-            {themeStyles && <style dangerouslySetInnerHTML={{ __html: themeStyles }} />}
-            <div className="max-w-md mx-auto min-h-screen bg-slate-50 shadow-2xl relative overflow-hidden flex flex-col">
-                <PWASplash logo={logoStr} initialDolar={initialDolar}>
-                    {children}
-                </PWASplash>
+        <>
+            {/* PANTALLA DE CARGA (SPLASH SCREEN) */}
+            <div className={`absolute inset-0 z-[100] bg-slate-900 flex flex-col items-center justify-center transition-opacity duration-500 ${showSplash ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                {/* Luz de fondo con el color de tu marca */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-[var(--color-brand,#4f46e5)] rounded-full blur-[120px] opacity-30 -translate-y-1/2 translate-x-1/2"></div>
+
+                <div className="w-40 h-40 flex items-center justify-center mb-6 animate-pulse z-10">
+                    {logo ? (
+                        <img src={logo} alt="Logo" className="max-w-full max-h-full object-contain drop-shadow-2xl" />
+                    ) : (
+                        <div className="w-24 h-24 bg-[var(--color-brand,#4f46e5)] rounded-3xl flex items-center justify-center shadow-lg shadow-[var(--color-brand,#4f46e5)]/30">
+                            <CarFront className="w-12 h-12 text-white" />
+                        </div>
+                    )}
+                </div>
+
+                {!logo && (
+                    <h1 className="text-3xl font-black text-white tracking-tighter z-10">
+                        CarShop<span className="text-[var(--color-brand,#4f46e5)]">ERP</span>
+                    </h1>
+                )}
+
+                {/* Puntitos de carga animados */}
+                <div className="mt-8 flex gap-2 z-10">
+                    <div className="w-2 h-2 rounded-full bg-[var(--color-brand,#4f46e5)] animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                    <div className="w-2 h-2 rounded-full bg-[var(--color-brand,#4f46e5)] animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                    <div className="w-2 h-2 rounded-full bg-[var(--color-brand,#4f46e5)] animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                </div>
             </div>
-        </div>
+
+            {/* CONTENIDO REAL DE LA PWA (Atrás del Splash) */}
+            {children}
+        </>
     );
 }
