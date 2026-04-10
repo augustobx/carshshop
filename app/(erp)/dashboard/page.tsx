@@ -1,35 +1,46 @@
 import { prisma as db } from "@/lib/prisma";
 import DashboardClient from "./DashboardClient";
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
-  // 1. Obtener cotización actual
-  const cfgDolar = await db.configuracion.findUnique({ where: { clave: 'dolar_blue' } });
-  const dolarBlue = cfgDolar ? parseFloat(cfgDolar.valor) : 1000;
+  // Calculamos la fecha de hace 30 días con Javascript nativo
+  const treintaDiasAtras = new Date();
+  treintaDiasAtras.setDate(treintaDiasAtras.getDate() - 30);
 
-  // 2. Obtener estadísticas de vehículos
-  const vehiculosEnPrep = await db.vehiculo.count({ where: { estado: 'EN_PREPARACION' } });
-  const vehiculosListos = await db.vehiculo.count({ where: { estado: 'LISTO_PARA_VENTA' } });
+  // Consultas en paralelo a Prisma para máxima velocidad
+  const [
+    stockDisponible,
+    tareasPendientes,
+    ventasMes,
+    enReparacion,
+    totalOperaciones,
+    capitalStock
+  ] = await Promise.all([
+    db.vehiculo.count({ where: { estado: 'LISTO_PARA_VENTA' } }),
+    db.tarea.count({ where: { estado_tarea: 'PENDIENTE' } }),
+    db.venta.aggregate({
+      _sum: { precio_final_usd: true },
+      where: { fecha_venta: { gte: treintaDiasAtras } }
+    }),
+    db.vehiculo.count({ where: { estado: 'EN_PREPARACION' } }),
+    db.venta.count(),
+    db.vehiculo.aggregate({
+      _sum: { precio_compra_usd: true },
+      where: { estado: { not: 'VENDIDO' } }
+    })
+  ]);
 
-  // 3. Obtener Capital en Préstamos Activos
-  const prestamosActivos = await db.prestamo.findMany({
-    where: { estado: 'EN_CURSO' },
-    include: { cuotas: { where: { estado: 'PENDIENTE' } } }
-  });
-
-  let capitalEnCalleUsd = 0;
-  prestamosActivos.forEach(p => {
-    p.cuotas.forEach(c => capitalEnCalleUsd += Number(c.monto_usd));
-  });
-
-  const stats = {
-    dolarBlue,
-    vehiculosEnPrep,
-    vehiculosListos,
-    capitalEnCalleUsd,
-    capitalEnCalleArs: capitalEnCalleUsd * dolarBlue,
-  };
-
-  return <DashboardClient stats={stats} />;
+  return (
+    <DashboardClient
+      stats={{
+        stockDisponible,
+        tareasPendientes,
+        ventasMesUsd: Number(ventasMes._sum.precio_final_usd || 0),
+        enReparacion,
+        totalOperaciones,
+        capitalStockUsd: Number(capitalStock._sum.precio_compra_usd || 0)
+      }}
+    />
+  );
 }

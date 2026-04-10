@@ -6,21 +6,33 @@ import { syncDolarApi } from '@/actions/config';
 import { RefreshCw, DollarSign, Loader2, Bell } from 'lucide-react';
 import Link from 'next/link';
 
-export default function TopBar({ initialDolar, initialTipo }: { initialDolar: number, initialTipo: string }) {
-    const { dolarBlue, setDolar, tipoDolar, setTipoDolar } = useConfigStore();
+export default function TopBar({
+    initialDolar,
+    initialTipo,
+    initialLogo,
+    initialTema
+}: {
+    initialDolar: number,
+    initialTipo: string,
+    initialLogo: string | null,
+    initialTema: any
+}) {
+    const { dolarBlue, setDolar, tipoDolar, setTipoDolar, setLogo, setTema } = useConfigStore();
     const [isSyncing, setIsSyncing] = useState(false);
 
-    // Hidratamos el estado global con los datos que vienen de la Base de Datos (Servidor)
+    // Hidratamos el estado global con los datos que vienen del Servidor
     useEffect(() => {
         setDolar(initialDolar);
         setTipoDolar(initialTipo);
-    }, [initialDolar, initialTipo, setDolar, setTipoDolar]);
+        if (initialLogo) setLogo(initialLogo);
+        if (initialTema) setTema(initialTema);
+    }, [initialDolar, initialTipo, initialLogo, initialTema, setDolar, setTipoDolar, setLogo, setTema]);
 
     const handleSync = async () => {
         setIsSyncing(true);
         const res = await syncDolarApi(tipoDolar);
         if (res.success && res.valor) {
-            setDolar(res.valor); // Actualiza TODO el sistema al instante (tarjetas, inputs, etc)
+            setDolar(res.valor);
         } else {
             alert(res.error || 'Error actualizando cotización');
         }
@@ -30,12 +42,10 @@ export default function TopBar({ initialDolar, initialTipo }: { initialDolar: nu
     return (
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-40 shadow-sm shrink-0">
             <div className="flex items-center text-sm font-medium text-slate-500">
-                {/* Aquí podemos poner Breadcrumbs o un Buscador Global a futuro */}
                 Sistema Bimonetario Activo
             </div>
 
             <div className="flex items-center gap-4">
-                {/* Widget del Dólar */}
                 <div className="flex items-center bg-emerald-50 border border-emerald-200 rounded-xl p-1.5 px-3 shadow-sm transition-all hover:shadow-md">
                     <DollarSign className="w-5 h-5 text-emerald-600 mr-2" />
                     <Link href="/configuracion" className="flex flex-col mr-4 group">

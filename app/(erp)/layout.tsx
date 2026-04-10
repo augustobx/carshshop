@@ -1,51 +1,63 @@
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import { prisma as db } from "@/lib/prisma";
 
-export default async function ERPLayout({ children }: { children: React.ReactNode }) {
-    // Leemos la configuración global de la base de datos (Motor Financiero)
+const inter = Inter({ subsets: ["latin"] });
+
+export const metadata: Metadata = {
+    title: "CarShop ERP | Gestión Integral",
+    description: "Sistema de gestión bimonetario para agencias de vehículos",
+};
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+    // 1. Leemos TODA la configuración global de la BD
     const cfgDolar = await db.configuracion.findUnique({ where: { clave: 'dolar_actual' } });
     const cfgTipo = await db.configuracion.findUnique({ where: { clave: 'tipo_dolar' } });
-
-    // Leemos la configuración de Branding (Tema de la Empresa)
+    const cfgLogo = await db.configuracion.findUnique({ where: { clave: 'empresa_logo' } });
     const cfgTema = await db.configuracion.findUnique({ where: { clave: 'empresa_tema' } });
 
+    // 2. Preparamos los valores iniciales
     const initialDolar = cfgDolar ? parseFloat(cfgDolar.valor) : 1000;
     const initialTipo = cfgTipo ? cfgTipo.valor : 'blue';
+    const initialLogo = cfgLogo ? cfgLogo.valor : null;
+    const initialTema = cfgTema ? JSON.parse(cfgTema.valor) : null;
 
-    // Procesamos los colores si es que guardaste un tema en la configuración
+    // 3. Inyectamos los colores del tema como CSS dinámico si existe
     let themeStyles = null;
-    if (cfgTema && cfgTema.valor) {
-        try {
-            const tema = JSON.parse(cfgTema.valor);
-            themeStyles = `
-        :root {
-          --color-brand: ${tema.primary};
-          --color-brand-hover: ${tema.hover};
-          --color-brand-ring: ${tema.ring};
-        }
-      `;
-        } catch (e) {
-            console.error("Error al leer el tema de la BD");
-        }
+    if (initialTema) {
+        themeStyles = `
+      :root {
+        --color-brand: ${initialTema.primary};
+        --color-brand-hover: ${initialTema.hover};
+        --color-brand-ring: ${initialTema.ring};
+      }
+    `;
     }
 
     return (
-        <div className="flex min-h-screen bg-slate-50 text-slate-900 antialiased">
-            {/* INYECTAMOS LAS VARIABLES CSS DEL TEMA ELEGIDO DESDE EL SERVIDOR */}
-            {themeStyles && <style dangerouslySetInnerHTML={{ __html: themeStyles }} />}
+        <html lang="es">
+            <body className={`${inter.className} bg-slate-50 text-slate-900 flex min-h-screen antialiased`}>
+                {themeStyles && <style dangerouslySetInnerHTML={{ __html: themeStyles }} />}
 
-            {/* Barra Lateral Izquierda (Solo para el ERP) */}
-            <Sidebar />
+                <Sidebar />
 
-            {/* Área de Contenido Principal (con Top Bar) */}
-            <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-                <TopBar initialDolar={initialDolar} initialTipo={initialTipo} />
+                <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+                    {/* Le pasamos el Logo y el Tema al TopBar para que hidrate el estado global */}
+                    <TopBar
+                        initialDolar={initialDolar}
+                        initialTipo={initialTipo}
+                        initialLogo={initialLogo}
+                        initialTema={initialTema}
+                    />
 
-                <div className="flex-1 overflow-y-auto">
-                    {children}
-                </div>
-            </main>
-        </div>
+                    <div className="flex-1 overflow-y-auto">
+                        {children}
+                    </div>
+                </main>
+            </body>
+        </html>
     );
 }
