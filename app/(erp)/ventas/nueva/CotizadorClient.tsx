@@ -6,6 +6,7 @@ import { useConfigStore } from '@/store/useConfigStore';
 import { registrarVenta } from '@/actions/ventas';
 import { Calculator, CarFront, DollarSign, Banknote, Loader2, Search, ArrowRight, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
 export default function CotizadorClient({ vehiculos, clientes }: { vehiculos: any[], clientes: any[] }) {
     const formatMoney = (amount: number) => amount.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -28,6 +29,23 @@ export default function CotizadorClient({ vehiculos, clientes }: { vehiculos: an
     const [anticipoUsd, setAnticipoUsd] = useState('');
 
     const [cantCuotas, setCantCuotas] = useState('12');
+
+    const searchParams = useSearchParams();
+
+    // AUTO-CARGA DE DATOS DESDE LA URL (EJ: DESDE UNA SEÑA)
+    useEffect(() => {
+        const urlVehiculo = searchParams.get('v');
+        const urlCliente = searchParams.get('c');
+
+        if (urlVehiculo) {
+            const vFound = vehiculos.find(v => v.id_vehiculo === parseInt(urlVehiculo));
+            if (vFound) setVSeleccionado(vFound);
+        }
+        if (urlCliente) {
+            const cFound = clientes.find(c => c.id_cliente === parseInt(urlCliente));
+            if (cFound) setCSeleccionado(cFound);
+        }
+    }, [searchParams, vehiculos, clientes]);
 
     const [fechaPrimerCuota, setFechaPrimerCuota] = useState(() => {
         const hoy = new Date();

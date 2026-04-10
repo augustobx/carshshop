@@ -144,10 +144,13 @@ export default function ClientesClient({ clientes }: { clientes: any[] }) {
                                                 </span>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 text-right">
+                                        <td className="px-6 py-4 text-right flex justify-end gap-2">
                                             <button onClick={() => openModal(c)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-indigo-100 hover:text-indigo-700 rounded-md transition-colors">
                                                 <Edit className="w-3.5 h-3.5" /> Editar
                                             </button>
+                                            <Link href={`/clientes/${c.id_cliente}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-black text-white bg-slate-800 hover:bg-slate-900 shadow-sm rounded-md transition-colors">
+                                                Carpeta
+                                            </Link>
                                         </td>
                                     </tr>
                                 ))

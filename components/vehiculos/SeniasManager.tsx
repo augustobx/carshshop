@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { guardarSenia, cancelarSenia } from '@/actions/senias';
-import { Loader2, Save, Ban, DollarSign, Banknote, History } from 'lucide-react';
+import { Loader2, Save, Ban, DollarSign, Banknote, History, ShoppingCart } from 'lucide-react';
 import { useConfigStore } from '@/store/useConfigStore';
 
 export default function SeniasManager({ vehiculo, clientes }: { vehiculo: any, clientes: any[] }) {
@@ -76,9 +77,19 @@ export default function SeniasManager({ vehiculo, clientes }: { vehiculo: any, c
                             <p className="text-amber-950 font-mono">$ {Number(seniaActiva.cotizacion).toLocaleString()}</p>
                         </div>
                     </div>
-                    <button onClick={() => handleCancelarSenia(seniaActiva.id_senia)} className="bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors">
-                        <Ban className="w-4 h-4" /> Cancelar Seña y Liberar Vehículo
-                    </button>
+
+                    {/* BOTONES DE ACCIÓN (NUEVO BOTÓN DE VENTA) */}
+                    <div className="flex flex-col md:flex-row gap-3 pt-4 border-t border-amber-200/50">
+                        <button onClick={() => handleCancelarSenia(seniaActiva.id_senia)} className="bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors flex-1 shadow-sm">
+                            <Ban className="w-5 h-5" /> Cancelar Seña y Liberar
+                        </button>
+                        <Link
+                            href={`/ventas/nueva?v=${vehiculo.id_vehiculo}&c=${seniaActiva.id_cliente}`}
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors flex-1 shadow-md shadow-emerald-600/20"
+                        >
+                            <ShoppingCart className="w-5 h-5" /> Facturar Venta Directo
+                        </Link>
+                    </div>
                 </div>
             )}
 
