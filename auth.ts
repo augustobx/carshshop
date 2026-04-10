@@ -1,21 +1,56 @@
-import NextAuth from "next-auth"
-import Credentials from "next-auth/providers/credentials"
-import { PrismaClient } from "@prisma/client"
+import { NextAuthOptions } from "next-auth";
+import CredentialsProvider from "next-auth/providers/credentials";
+import { prisma as db } from "@/lib/prisma";
+import bcrypt from "bcryptjs";
 
-const prisma = new PrismaClient()
-
-export const { handlers, signIn, signOut, auth } = NextAuth({
+export const authOptions: NextAuthOptions = {
   providers: [
-    Credentials({
+    CredentialsProvider({
+      name: "Credentials",
       credentials: {
-        email: {},
-        password: {},
+        email: { label: "Email", type: "text" },
+        password: { label: "Password", type: "password" }
       },
-      authorize: async (credentials) => {
-        // Implement real database check later
-        console.log("Authorizing...", credentials);
-        return { id: "1", name: "Admin", email: credentials.email as string }
-      },
-    }),
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) return null;
+
+        const user = await db.usuario.findUnique({
+          where: { email: credentials.email }
+        });
+
+        if (!user) return null;
+
+        const passwordMatch = await bcrypt.compare(credentials.password, user.password);
+        if (!passwordMatch) return null;
+
+        // Si todo coincide, devolvemos la info a la sesión
+        return {
+          id: user.id_usuario.toString(),
+          name: user.nombre,
+          email: user.email,
+          rol: user.rol, // Pasamos el rol exacto (Admin o Vendedor)
+        };
+      }
+    })
   ],
-})
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+        token.rol = (user as any).rol;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (session.user) {
+        (session.user as any).id = token.id;
+        (session.user as any).rol = token.rol;
+      }
+      return session;
+    }
+  },
+  pages: {
+    signIn: "/login", // Le decimos dónde está nuestra pantalla de login hermosa
+  },
+  session: { strategy: "jwt" }
+};
