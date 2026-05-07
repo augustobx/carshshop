@@ -57,10 +57,21 @@ async function main() {
 
   const clientes = db.clientes || [];
   console.log(`Cargando ${clientes.length} Clientes...`);
-  if (clientes.length > 0) {
-    await prisma.cliente.createMany({ data: clientes });
-  }
 
+  if (clientes.length > 0) {
+    // Filtramos solo los datos que acepta tu modelo de Prisma y limpiamos espacios vacíos
+    const clientesLimpios = clientes.map((c: any) => ({
+      id_cliente: c.id_cliente,
+      nombre_completo: typeof c.nombre_completo === 'string' ? c.nombre_completo.trim() : c.nombre_completo,
+      // Si el DNI está vacío, lo pasamos a null para que no falle el @unique de Prisma
+      dni: typeof c.dni === 'string' && c.dni.trim() !== '' ? c.dni.trim() : null,
+      telefono: typeof c.telefono === 'string' ? c.telefono.trim() : c.telefono,
+      email: typeof c.email === 'string' && c.email.trim() !== '' ? c.email.trim() : null,
+      domicilio: typeof c.domicilio === 'string' ? c.domicilio.trim() : c.domicilio
+    }));
+
+    await prisma.cliente.createMany({ data: clientesLimpios });
+  }
   const vehiculos = db.vehiculos || [];
   console.log(`Cargando ${vehiculos.length} Vehículos...`);
   for (const v of vehiculos) {
