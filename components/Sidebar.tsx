@@ -15,7 +15,8 @@ import {
   LogOut,
   Wallet,
   CarFront,
-  ShieldCheck
+  ShieldCheck,
+  Bike
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -25,6 +26,7 @@ export default function Sidebar() {
   const menuItems = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Vehículos', href: '/vehiculos', icon: Car },
+    { name: 'Motos', href: '/motos', icon: Bike },
     { name: 'Ventas y Cotizador', href: '/ventas', icon: BadgeDollarSign },
     { name: 'Cobranzas y Cuotas', href: '/cuotas', icon: CalendarClock },
     { name: 'Préstamos', href: '/prestamos', icon: HandCoins },

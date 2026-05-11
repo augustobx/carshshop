@@ -17,6 +17,7 @@ export default function VehiculoForm({ vehiculo }: { vehiculo?: any }) {
     // FORMULARIO PRINCIPAL (Para datos de texto)
     const { register, handleSubmit, watch, formState: { errors } } = useForm({
         defaultValues: vehiculo || {
+            tipo_vehiculo: 'Auto',
             estado: 'EN_PREPARACION',
             tipo_ingreso: 'Propio',
             comision_consignacion_pct: 0,
@@ -25,6 +26,7 @@ export default function VehiculoForm({ vehiculo }: { vehiculo?: any }) {
     });
 
     const tipoIngreso = watch('tipo_ingreso');
+    const tipoVehiculo = watch('tipo_vehiculo');
 
     // ESTADOS DE PRECIOS 100% AISLADOS (Aquí está la magia que soluciona el bug)
     // Inicializamos con el valor exacto de la base de datos, sin recalcular nada.
@@ -115,6 +117,13 @@ export default function VehiculoForm({ vehiculo }: { vehiculo?: any }) {
                         </h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
                             <div>
+                                <label className={labelClass}>Tipo de Vehículo *</label>
+                                <select {...register('tipo_vehiculo')} className={inputClass} required>
+                                    <option value="Auto">Auto / Camioneta</option>
+                                    <option value="Moto">Moto</option>
+                                </select>
+                            </div>
+                            <div>
                                 <label className={labelClass}>Marca *</label>
                                 <input {...register('marca')} required className={inputClass} placeholder="Ej: Volkswagen" />
                             </div>
@@ -122,6 +131,12 @@ export default function VehiculoForm({ vehiculo }: { vehiculo?: any }) {
                                 <label className={labelClass}>Modelo *</label>
                                 <input {...register('modelo')} required className={inputClass} placeholder="Ej: Amarok V6" />
                             </div>
+                            {tipoVehiculo === 'Moto' && (
+                                <div>
+                                    <label className={labelClass}>Cilindrada</label>
+                                    <input {...register('cilindrada')} className={inputClass} placeholder="Ej: 250cc" />
+                                </div>
+                            )}
                             <div>
                                 <label className={labelClass}>Año *</label>
                                 <input type="number" {...register('anio', { valueAsNumber: true })} required className={inputClass} />

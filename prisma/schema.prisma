@@ -51,6 +51,8 @@ model Vehiculo {
   fecha_ingreso     DateTime       @default(now())
   tipo_ingreso      String?        @default("Propio") 
   comision_consignacion_pct Decimal? @db.Decimal(5, 2)
+  tipo_vehiculo     String         @default("Auto")
+  cilindrada        String?
   
   ventas            Venta[]
   tareas            Tarea[]

@@ -18,16 +18,20 @@ const COLUMNAS_DEF = [
     { id: 'tareas', label: 'Tareas Pendientes' }
 ];
 
-export default function VehiculosClient({ vehiculos, currentTab, currentDolar }: any) {
+export default function VehiculosClient({ vehiculos, currentTab, currentDolar, isMotos }: any) {
     const formatMoney = (amount: number) => amount.toLocaleString('es-AR', { maximumFractionDigits: 0 });
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
 
     // --- ESTADOS DE VISTA ---
-    const [currentView, setCurrentView] = useState<'cards' | 'lista'>('cards');
+    const [currentView, setCurrentView] = useState<'cards' | 'lista'>('lista');
     const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '');
-    const [orden, setOrden] = useState('nuevos');
+    const [orden, setOrden] = useState('az');
+    
+    // --- ESTADOS DE PAGINACIÓN ---
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 15;
 
     // --- ESTADOS DE COLUMNAS (Para la vista de Lista) ---
     const [colsHidden, setColsHidden] = useState<Record<string, boolean>>({});
@@ -60,6 +64,7 @@ export default function VehiculosClient({ vehiculos, currentTab, currentDolar }:
             if (searchTerm) params.set('q', searchTerm);
             else params.delete('q');
             router.push(`${pathname}?${params.toString()}`);
+            setCurrentPage(1); // Reset page on search
         }, 500);
         return () => clearTimeout(delayDebounceFn);
     }, [searchTerm, pathname, router, searchParams]);
@@ -74,15 +79,22 @@ export default function VehiculosClient({ vehiculos, currentTab, currentDolar }:
         return 0;
     });
 
+    // --- PAGINACIÓN EN MEMORIA ---
+    const totalPages = Math.ceil(vehiculosOrdenados.length / itemsPerPage);
+    const paginatedVehiculos = vehiculosOrdenados.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
+
     return (
         <div className="p-6 max-w-[1600px] mx-auto space-y-6">
             {/* HEADER PRINCIPAL */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <h1 className="text-3xl font-bold flex items-center gap-3 text-slate-800">
-                    <Car className="w-8 h-8 text-indigo-600" /> Gestión de Vehículos
+                    <Car className="w-8 h-8 text-indigo-600" /> Gestión de {isMotos ? 'Motos' : 'Vehículos'}
                 </h1>
                 <Link href="/vehiculos/agregar" className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg font-medium flex items-center gap-2 hover:bg-indigo-700 shadow-sm">
-                    <Plus className="w-5 h-5" /> Agregar Vehículo
+                    <Plus className="w-5 h-5" /> Agregar {isMotos ? 'Moto' : 'Vehículo'}
                 </Link>
             </div>
 
@@ -173,14 +185,14 @@ export default function VehiculosClient({ vehiculos, currentTab, currentDolar }:
                 </div>
 
                 {/* CONTENIDO: LISTA O TARJETAS */}
-                {vehiculosOrdenados.length === 0 ? (
+                {paginatedVehiculos.length === 0 ? (
                     <div className="text-center py-16 text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-300">
                         No se encontraron vehículos con los filtros actuales.
                     </div>
                 ) : currentView === 'lista' ? (
                     /* ====== VISTA DE LISTA TABULAR ====== */
-                    <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
-                        <table className="w-full text-left text-sm whitespace-nowrap">
+                    <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-280px)] rounded-xl border border-slate-200 shadow-sm custom-scrollbar">
+                        <table className="w-full text-left text-sm whitespace-nowrap min-w-[1200px]">
                             <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 uppercase tracking-wider text-xs">
                                 <tr>
                                     {!colsHidden['nro'] && <th className="px-4 py-3">ID</th>}
@@ -196,16 +208,16 @@ export default function VehiculosClient({ vehiculos, currentTab, currentDolar }:
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 bg-white">
-                                {vehiculosOrdenados.map((v: any) => (
+                                {paginatedVehiculos.map((v: any) => (
                                     <tr key={v.id_vehiculo} className="hover:bg-slate-50 transition-colors">
                                         {!colsHidden['nro'] && <td className="px-4 py-3 font-mono text-slate-400">#{v.id_vehiculo}</td>}
                                         {!colsHidden['marca'] && (
                                             <td className="px-4 py-3 font-bold text-slate-900">
-                                                {v.marca} {v.modelo}
+                                                {v.marca} {v.modelo} {v.tipo_vehiculo === 'Moto' && <span className="ml-2 px-2 py-0.5 rounded text-[10px] font-black bg-blue-100 text-blue-700 uppercase">Moto</span>}
                                                 {v.tipo_ingreso === 'Consignacion' && <span className="ml-2 px-2 py-0.5 rounded text-[10px] font-black bg-fuchsia-100 text-fuchsia-700 uppercase">Consign.</span>}
                                             </td>
                                         )}
-                                        {!colsHidden['anio'] && <td className="px-4 py-3 text-slate-600">{v.anio}</td>}
+                                        {!colsHidden['anio'] && <td className="px-4 py-3 text-slate-600">{v.anio} {v.cilindrada ? `• ${v.cilindrada}` : ''}</td>}
                                         {!colsHidden['patente'] && <td className="px-4 py-3 font-mono uppercase text-slate-600 bg-slate-100/50 rounded inline-block mt-2 ml-4">{v.patente}</td>}
                                         {!colsHidden['km'] && <td className="px-4 py-3 text-right text-slate-600">{formatMoney(v.km)}</td>}
                                         {!colsHidden['compra'] && <td className="px-4 py-3 text-right font-medium text-slate-700">{formatMoney(v.compra_usd)}</td>}
@@ -242,7 +254,7 @@ export default function VehiculosClient({ vehiculos, currentTab, currentDolar }:
                 ) : (
                     /* ====== VISTA DE TARJETAS (Bento Grid) ====== */
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-                        {vehiculosOrdenados.map((v: any) => (
+                        {paginatedVehiculos.map((v: any) => (
                             <div key={v.id_vehiculo} className="border border-slate-200 rounded-2xl overflow-hidden hover:shadow-md transition-shadow flex flex-col bg-white relative">
                                 {v.tipo_ingreso === 'Consignacion' && (
                                     <div className="absolute top-0 right-0 bg-fuchsia-600 text-white text-[10px] font-black uppercase px-3 py-1 rounded-bl-xl shadow-sm flex items-center gap-1 z-10">
@@ -275,6 +287,42 @@ export default function VehiculosClient({ vehiculos, currentTab, currentDolar }:
                                 </div>
                             </div>
                         ))}
+                    </div>
+                )}
+
+                {/* CONTROLES DE PAGINACIÓN */}
+                {totalPages > 1 && (
+                    <div className="flex justify-between items-center bg-white p-4 border-t border-slate-200 rounded-b-xl shadow-sm">
+                        <span className="text-sm text-slate-500 font-medium">
+                            Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, vehiculosOrdenados.length)} de {vehiculosOrdenados.length} resultados
+                        </span>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                                className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-bold text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                            >
+                                Anterior
+                            </button>
+                            <div className="flex items-center gap-1 px-2">
+                                {Array.from({ length: totalPages }).map((_, i) => (
+                                    <button
+                                        key={i}
+                                        onClick={() => setCurrentPage(i + 1)}
+                                        className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-bold transition-colors ${currentPage === i + 1 ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                                    >
+                                        {i + 1}
+                                    </button>
+                                ))}
+                            </div>
+                            <button
+                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                disabled={currentPage === totalPages}
+                                className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-bold text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                            >
+                                Siguiente
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>

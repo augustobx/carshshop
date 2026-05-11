@@ -26,8 +26,10 @@ export async function guardarVehiculo(data: any) {
   try {
     await db.vehiculo.create({
       data: {
+        tipo_vehiculo: data.tipo_vehiculo,
         marca: data.marca,
         modelo: data.modelo,
+        cilindrada: data.cilindrada || null,
         anio: data.anio,
         km: data.km,
         patente: data.patente,
@@ -61,8 +63,10 @@ export async function actualizarVehiculo(id: number, data: any) {
     await db.vehiculo.update({
       where: { id_vehiculo: id },
       data: {
+        tipo_vehiculo: data.tipo_vehiculo,
         marca: data.marca,
         modelo: data.modelo,
+        cilindrada: data.cilindrada || null,
         anio: data.anio,
         km: data.km,
         patente: data.patente,

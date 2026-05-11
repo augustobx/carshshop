@@ -33,15 +33,19 @@ export default async function ERPLayout({ children }: { children: React.ReactNod
             {themeStyles && <style dangerouslySetInnerHTML={{ __html: themeStyles }} />}
 
             {/* Sidebar solo visible en el ERP */}
-            <Sidebar />
+            <div className="print:hidden">
+                <Sidebar />
+            </div>
 
             <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-                <TopBar
-                    initialDolar={initialDolar}
-                    initialTipo={initialTipo}
-                    initialLogo={initialLogo}
-                    initialTema={initialTema}
-                />
+                <div className="print:hidden">
+                    <TopBar
+                        initialDolar={initialDolar}
+                        initialTipo={initialTipo}
+                        initialLogo={initialLogo}
+                        initialTema={initialTema}
+                    />
+                </div>
 
                 <div className="flex-1 overflow-y-auto">
                     {children}

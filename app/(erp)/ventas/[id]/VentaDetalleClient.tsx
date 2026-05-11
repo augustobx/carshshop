@@ -1,7 +1,7 @@
 'use client';
 
 import Link from "next/link";
-import { ArrowLeft, Receipt, Calendar, CarFront, UserRound, Banknote, DollarSign, CheckCircle2, AlertTriangle, TrendingUp, MapPin, Phone, Mail } from "lucide-react";
+import { ArrowLeft, Receipt, Calendar, CarFront, UserRound, Banknote, DollarSign, CheckCircle2, AlertTriangle, TrendingUp, MapPin, Phone, Mail, Printer } from "lucide-react";
 
 export default function VentaDetalleClient({ venta }: { venta: any }) {
     const formatMoney = (amount: number) => amount.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -40,15 +40,20 @@ export default function VentaDetalleClient({ venta }: { venta: any }) {
                         </p>
                     </div>
                 </div>
-                <Link href="/ventas" className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold flex items-center gap-2 transition-colors">
-                    <ArrowLeft className="w-4 h-4" /> Volver al Historial
-                </Link>
+                <div className="flex gap-3 print:hidden">
+                    <button onClick={() => window.print()} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center gap-2 transition-colors shadow-sm">
+                        <Printer className="w-4 h-4" /> Imprimir para Cliente
+                    </button>
+                    <Link href="/ventas" className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold flex items-center gap-2 transition-colors">
+                        <ArrowLeft className="w-4 h-4" /> Volver al Historial
+                    </Link>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
                 {/* COLUMNA IZQUIERDA: RESUMEN FINANCIERO */}
-                <div className="lg:col-span-1 space-y-6">
+                <div className="lg:col-span-1 space-y-6 print:hidden">
                     <div className="bg-slate-900 rounded-2xl p-6 shadow-xl text-white border border-slate-800">
                         <h3 className="text-sm font-black text-indigo-300 uppercase tracking-widest mb-6 border-b border-slate-700 pb-3">Resumen Contable</h3>
 
@@ -92,7 +97,7 @@ export default function VentaDetalleClient({ venta }: { venta: any }) {
                 </div>
 
                 {/* COLUMNA DERECHA: DATOS Y CUOTAS */}
-                <div className="lg:col-span-2 space-y-6">
+                <div className="lg:col-span-2 space-y-6 print:col-span-3">
 
                     {/* Tarjetas de Vehículo y Cliente */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
