@@ -75,7 +75,7 @@ async function main() {
   const vehiculos = db.vehiculos || [];
   console.log(`Cargando ${vehiculos.length} Vehículos...`);
   for (const v of vehiculos) {
-    let estadoMapped = EstadoVehiculo.EN_PREPARACION;
+    let estadoMapped: EstadoVehiculo = EstadoVehiculo.EN_PREPARACION;
     if (v.estado === 'Listo para Venta') estadoMapped = EstadoVehiculo.LISTO_PARA_VENTA;
     if (v.estado === 'En Consignación') estadoMapped = EstadoVehiculo.EN_CONSIGNACION;
     if (v.estado === 'Señado') estadoMapped = EstadoVehiculo.SENADO;
