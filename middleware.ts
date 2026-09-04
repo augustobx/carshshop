@@ -1,10 +1,19 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+function normalizeHostname(host: string | null): string {
+  if (!host) return "";
+  return host.split(":")[0].trim().toLowerCase();
+}
+
 export function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
+  const host = normalizeHostname(
+    request.headers.get("x-forwarded-host") || request.headers.get("host")
+  );
+  const platformHost = normalizeHostname(process.env.PLATFORM_HOST || "onlycars.nanoapps.ar");
+  const isPlatformHost = host === platformHost;
 
-  // Rutas públicas que no requieren autenticación
   const isPublicPath =
     path === "/login" ||
     path.startsWith("/api/health") ||
@@ -17,8 +26,32 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Comprobar cookie de sesión de OnlyCars
   const sessionToken = request.cookies.get("onlycars_user_session")?.value;
+
+  // onlycars.nanoapps.ar es exclusivamente la plataforma/SuperAdmin.
+  if (isPlatformHost) {
+    if (!sessionToken) {
+      const loginUrl = new URL("/login", request.url);
+      loginUrl.searchParams.set("redirect", "/superadmin");
+      return NextResponse.redirect(loginUrl);
+    }
+
+    if (path === "/") {
+      return NextResponse.redirect(new URL("/superadmin", request.url));
+    }
+
+    // Evita que el dominio reservado de plataforma intente renderizar el ERP de un tenant.
+    if (!path.startsWith("/superadmin")) {
+      return NextResponse.redirect(new URL("/superadmin", request.url));
+    }
+
+    return NextResponse.next();
+  }
+
+  // Los hosts de tenant nunca deben exponer el panel de plataforma.
+  if (path.startsWith("/superadmin")) {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
 
   if (!sessionToken) {
     const loginUrl = new URL("/login", request.url);
@@ -28,10 +61,10 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Inyectar header con el hostname para la resolución de tenant en Server Components
+  // El router compartido debe preservar Host / x-forwarded-host.
+  // Copiamos el host resuelto para Server Components y Server Actions.
   const requestHeaders = new Headers(request.headers);
-  const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || "localhost";
-  requestHeaders.set("x-tenant-host", host);
+  requestHeaders.set("x-tenant-host", host || "localhost");
 
   return NextResponse.next({
     request: {
@@ -42,12 +75,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
