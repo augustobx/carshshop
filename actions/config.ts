@@ -4,6 +4,7 @@ import { prisma as db } from '@/lib/prisma';
 import { getTenantContext } from '@/lib/tenant-context';
 import { requireTenantRole } from '@/lib/user-auth';
 import { normalizeSellerPwaConfig, SellerPwaConfig } from '@/lib/seller-pwa-config';
+import { getObjectStorage } from '@/lib/storage';
 import { revalidatePath } from 'next/cache';
 import { RolMembresia } from '@prisma/client';
 
@@ -13,22 +14,8 @@ const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
 async function syncVehicleArsPrices(tx: any, tenantId: string, rate: number) {
   if (!Number.isFinite(rate) || rate <= 0) return;
-
-  await tx.$executeRaw`
-    UPDATE Vehiculo
-       SET precio_venta_ars = ROUND(precio_venta_usd * ${rate}, 2)
-     WHERE tenantId = ${tenantId}
-       AND precio_venta_usd IS NOT NULL
-       AND precio_venta_usd > 0
-  `;
-
-  await tx.$executeRaw`
-    UPDATE Vehiculo
-       SET precio_compra_ars = ROUND(precio_compra_usd * ${rate}, 2)
-     WHERE tenantId = ${tenantId}
-       AND precio_compra_usd IS NOT NULL
-       AND precio_compra_usd > 0
-  `;
+  await tx.$executeRaw`UPDATE Vehiculo SET precio_venta_ars = ROUND(precio_venta_usd * ${rate}, 2) WHERE tenantId = ${tenantId} AND precio_venta_usd IS NOT NULL AND precio_venta_usd > 0`;
+  await tx.$executeRaw`UPDATE Vehiculo SET precio_compra_ars = ROUND(precio_compra_usd * ${rate}, 2) WHERE tenantId = ${tenantId} AND precio_compra_usd IS NOT NULL AND precio_compra_usd > 0`;
 }
 
 function revalidateFinancialViews() {
@@ -42,6 +29,37 @@ function revalidateFinancialViews() {
   revalidatePath('/documentos', 'layout');
   revalidatePath('/pwa/dashboard');
   revalidatePath('/pwa/cotizador');
+  revalidatePath('/pwa/operaciones');
+}
+
+export async function subirLogoTenant(formData: FormData) {
+  try {
+    const tenant = await getTenantContext();
+    await requireTenantRole(tenant.id, CONFIG_ROLES);
+    const file = formData.get('file') as File | null;
+    if (!file || !file.size) return { success: false, error: 'Seleccioná una imagen.' };
+
+    const uploaded = await getObjectStorage().upload({
+      tenantId: tenant.id,
+      folder: 'branding',
+      fileName: file.name,
+      mimeType: file.type,
+      buffer: Buffer.from(await file.arrayBuffer()),
+    });
+
+    await db.tenantSettings.upsert({
+      where: { tenantId: tenant.id },
+      update: { logoUrl: uploaded.url },
+      create: { tenantId: tenant.id, appName: tenant.name, logoUrl: uploaded.url },
+    });
+    revalidatePath('/', 'layout');
+    revalidatePath('/configuracion');
+    revalidatePath('/pwa', 'layout');
+    return { success: true, url: uploaded.url };
+  } catch (error: any) {
+    console.error('Error subiendo logo:', error);
+    return { success: false, error: error?.message || 'No se pudo subir el logo.' };
+  }
 }
 
 export async function guardarConfiguracion(data: {
@@ -77,53 +95,28 @@ export async function guardarConfiguracion(data: {
     if (!['blue', 'oficial', 'mep'].includes(data.tipoDolar)) return { success: false, error: 'Tipo de dólar inválido.' };
     if (data.primaryColor && !HEX_RE.test(data.primaryColor)) return { success: false, error: 'Color principal inválido.' };
     if (data.secondaryColor && !HEX_RE.test(data.secondaryColor)) return { success: false, error: 'Color secundario inválido.' };
-    if (data.logoUrl?.startsWith('data:') && data.logoUrl.length > 1_500_000) return { success: false, error: 'El logo es demasiado pesado. Usá una imagen menor a 1 MB.' };
+    if (data.logoUrl?.startsWith('data:')) return { success: false, error: 'El logo debe subirse al almacenamiento de Cloudflare.' };
 
     const settings = await db.$transaction(async (tx) => {
-      await tx.tenant.update({
-        where: { id: tenant.id },
-        data: { name: appName, cuit, address: direccion, phone: telefono, email },
-      });
-
-      const saved = await tx.tenantSettings.upsert({
-        where: { tenantId: tenant.id },
-        update: {
-          appName,
-          dolarActual: dolar,
-          tipoDolar: data.tipoDolar,
-          tnaFinanciacion: Math.max(0, Number(data.tnaFinanciacion || 0)),
-          comisionVentaDefecto: Math.max(0, Number(data.comisionVentaDefecto || 0)),
-          logoUrl: data.logoUrl || null,
-          primaryColor: data.primaryColor || '#2563eb',
-          secondaryColor: data.secondaryColor || '#0f172a',
-          telefonoContacto: telefono,
-          emailContacto: email,
-          whatsappLead: data.whatsappLead?.trim() || null,
-          cuit,
-          razonSocial,
-          direccion,
-          pieImpresion: data.pieImpresion?.trim() || null,
-        },
-        create: {
-          tenantId: tenant.id,
-          appName,
-          dolarActual: dolar,
-          tipoDolar: data.tipoDolar,
-          tnaFinanciacion: Math.max(0, Number(data.tnaFinanciacion || 0)),
-          comisionVentaDefecto: Math.max(0, Number(data.comisionVentaDefecto || 0)),
-          logoUrl: data.logoUrl || null,
-          primaryColor: data.primaryColor || '#2563eb',
-          secondaryColor: data.secondaryColor || '#0f172a',
-          telefonoContacto: telefono,
-          emailContacto: email,
-          whatsappLead: data.whatsappLead?.trim() || null,
-          cuit,
-          razonSocial,
-          direccion,
-          pieImpresion: data.pieImpresion?.trim() || null,
-        },
-      });
-
+      await tx.tenant.update({ where: { id: tenant.id }, data: { name: appName, cuit, address: direccion, phone: telefono, email } });
+      const values = {
+        appName,
+        dolarActual: dolar,
+        tipoDolar: data.tipoDolar,
+        tnaFinanciacion: Math.max(0, Number(data.tnaFinanciacion || 0)),
+        comisionVentaDefecto: Math.max(0, Number(data.comisionVentaDefecto || 0)),
+        logoUrl: data.logoUrl || null,
+        primaryColor: data.primaryColor || '#2563eb',
+        secondaryColor: data.secondaryColor || '#0f172a',
+        telefonoContacto: telefono,
+        emailContacto: email,
+        whatsappLead: data.whatsappLead?.trim() || null,
+        cuit,
+        razonSocial,
+        direccion,
+        pieImpresion: data.pieImpresion?.trim() || null,
+      };
+      const saved = await tx.tenantSettings.upsert({ where: { tenantId: tenant.id }, update: values, create: { tenantId: tenant.id, ...values } });
       await syncVehicleArsPrices(tx, tenant.id, dolar);
       return saved;
     });
@@ -142,13 +135,7 @@ export async function guardarPwaVendedorConfig(input: SellerPwaConfig) {
     const tenant = await getTenantContext();
     await requireTenantRole(tenant.id, CONFIG_ROLES);
     const config = normalizeSellerPwaConfig(input);
-
-    await db.tenantFeature.upsert({
-      where: { tenantId_featureKey: { tenantId: tenant.id, featureKey: 'seller_pwa' } },
-      update: { isEnabled: true, config },
-      create: { tenantId: tenant.id, featureKey: 'seller_pwa', isEnabled: true, config },
-    });
-
+    await db.tenantFeature.upsert({ where: { tenantId_featureKey: { tenantId: tenant.id, featureKey: 'seller_pwa' } }, update: { isEnabled: true, config }, create: { tenantId: tenant.id, featureKey: 'seller_pwa', isEnabled: true, config } });
     revalidatePath('/configuracion');
     revalidatePath('/pwa', 'layout');
     return { success: true, config };
@@ -165,10 +152,8 @@ export async function updateConfig(clave: string, valor: string) {
     const dataToUpdate: Record<string, unknown> = {};
     let newRate: number | null = null;
 
-    if (clave === 'dolar_actual') {
-      newRate = parseFloat(valor) || 1400;
-      dataToUpdate.dolarActual = newRate;
-    } else if (clave === 'tipo_dolar' && ['blue', 'oficial', 'mep'].includes(valor)) dataToUpdate.tipoDolar = valor;
+    if (clave === 'dolar_actual') { newRate = parseFloat(valor) || 1400; dataToUpdate.dolarActual = newRate; }
+    else if (clave === 'tipo_dolar' && ['blue', 'oficial', 'mep'].includes(valor)) dataToUpdate.tipoDolar = valor;
     else if (clave === 'empresa_logo') dataToUpdate.logoUrl = valor || null;
     else if (clave === 'tna') dataToUpdate.tnaFinanciacion = Math.max(0, parseFloat(valor) || 0);
     else if (clave === 'empresa_tema') {
@@ -181,7 +166,6 @@ export async function updateConfig(clave: string, valor: string) {
       await tx.tenantSettings.upsert({ where: { tenantId: tenant.id }, update: dataToUpdate, create: { tenantId: tenant.id, appName: tenant.name, ...dataToUpdate } });
       if (newRate) await syncVehicleArsPrices(tx, tenant.id, newRate);
     });
-
     revalidateFinancialViews();
     return { success: true };
   } catch (error) {
@@ -203,14 +187,9 @@ export async function syncDolarApi(tipo: string = 'blue') {
     if (!Number.isFinite(valorVenta) || valorVenta <= 0) return { success: false, error: 'Cotización no encontrada.' };
 
     await db.$transaction(async (tx) => {
-      await tx.tenantSettings.upsert({
-        where: { tenantId: tenant.id },
-        update: { dolarActual: valorVenta, tipoDolar: tipo },
-        create: { tenantId: tenant.id, appName: tenant.name, dolarActual: valorVenta, tipoDolar: tipo },
-      });
+      await tx.tenantSettings.upsert({ where: { tenantId: tenant.id }, update: { dolarActual: valorVenta, tipoDolar: tipo }, create: { tenantId: tenant.id, appName: tenant.name, dolarActual: valorVenta, tipoDolar: tipo } });
       await syncVehicleArsPrices(tx, tenant.id, valorVenta);
     });
-
     revalidateFinancialViews();
     return { success: true, valor: valorVenta };
   } catch (error) {
