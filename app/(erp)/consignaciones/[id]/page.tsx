@@ -1,4 +1,5 @@
 import { prisma as db } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant-context";
 import ConsignacionDetalleClient from "./ConsignacionDetalleClient";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -12,9 +13,11 @@ export default async function ConsignacionDetallePage({ params }: { params: Prom
 
     if (isNaN(idVehiculo)) return notFound();
 
-    // Buscamos el vehículo con su dueño y chequeamos si tiene una Venta asociada
+    const tenant = await getTenantContext();
+
+    // Buscamos el vehículo con su dueño y chequeamos si tiene una Venta asociada, filtrado por tenant
     const vehiculoDb = await db.vehiculo.findUnique({
-        where: { id_vehiculo: idVehiculo },
+        where: { id_vehiculo: idVehiculo, tenantId: tenant.id },
         include: {
             cliente: true,
             ventas: {

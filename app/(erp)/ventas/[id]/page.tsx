@@ -1,4 +1,5 @@
 import { prisma as db } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant-context";
 import VentaDetalleClient from "./VentaDetalleClient";
 import { notFound } from "next/navigation";
 
@@ -10,8 +11,10 @@ export default async function VentaDetallePage({ params }: { params: Promise<{ i
 
     if (isNaN(idVenta)) return notFound();
 
+    const tenant = await getTenantContext();
+
     const ventaDb = await db.venta.findUnique({
-        where: { id_venta: idVenta },
+        where: { id_venta: idVenta, tenantId: tenant.id },
         include: {
             cliente: true,
             vehiculo: true,

@@ -1,4 +1,5 @@
 import { prisma as db } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant-context";
 import ClientesClient from "./ClientesClient";
 import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
@@ -8,15 +9,20 @@ export const dynamic = "force-dynamic";
 export default async function ClientesPage({ searchParams }: { searchParams: Promise<any> }) {
     const params = await searchParams;
     const q = params.q || '';
+    const tenant = await getTenantContext();
 
-    // Buscador global por nombre, DNI o Email
-    const where = q ? {
-        OR: [
+    // Buscador global por nombre, DNI o Email dentro de la concesionaria
+    const where: any = {
+        tenantId: tenant.id
+    };
+
+    if (q) {
+        where.OR = [
             { nombre_completo: { contains: q } },
             { dni: { contains: q } },
             { email: { contains: q } }
-        ]
-    } : {};
+        ];
+    }
 
     const clientesDb = await db.cliente.findMany({
         where,

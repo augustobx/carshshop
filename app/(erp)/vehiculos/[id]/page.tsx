@@ -1,4 +1,5 @@
 import { prisma as db } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant-context";
 import { notFound } from "next/navigation";
 import VehiculoDashboardClient from "./VehiculoDashboardClient";
 
@@ -10,13 +11,18 @@ export default async function DetalleVehiculoPage({ params }: { params: Promise<
 
     if (isNaN(idVehiculo)) notFound();
 
-    // Traemos el vehículo con todas sus relaciones (Tareas y Gastos)
-    const clientesDb = await db.cliente.findMany({ orderBy: { nombre_completo: 'asc' } });
+    const tenant = await getTenantContext();
+
+    // Traemos el vehículo con todas sus relaciones filtrado estrictamente por tenant
+    const clientesDb = await db.cliente.findMany({
+        where: { tenantId: tenant.id },
+        orderBy: { nombre_completo: 'asc' }
+    });
     const vehiculoDb = await db.vehiculo.findUnique({
-        where: { id_vehiculo: idVehiculo },
+        where: { id_vehiculo: idVehiculo, tenantId: tenant.id },
         include: {
             tareas: { include: { gastos: true }, orderBy: { id_tarea: 'desc' } },
-            senias: { include: { cliente: true }, orderBy: { id_senia: 'desc' } }, // <-- AGREGAR ESTO
+            senias: { include: { cliente: true }, orderBy: { id_senia: 'desc' } },
             anotaciones: { include: { usuario: true }, orderBy: { fecha: 'desc' } }
         }
     });

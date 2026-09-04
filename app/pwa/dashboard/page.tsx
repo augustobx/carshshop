@@ -1,12 +1,15 @@
 import { prisma as db } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant-context";
 import DashboardMobileClient from "./DashboardMobileClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function PWADashboardPage() {
-    // Buscamos todo lo que NO esté vendido
+    const tenant = await getTenantContext();
+
+    // Buscamos todo lo que NO esté vendido del tenant
     const vehiculosDb = await db.vehiculo.findMany({
-        where: { estado: { not: 'VENDIDO' } },
+        where: { tenantId: tenant.id, estado: { not: 'VENDIDO' } },
         orderBy: { marca: 'asc' }
     });
 

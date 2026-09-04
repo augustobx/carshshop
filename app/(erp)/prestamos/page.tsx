@@ -1,4 +1,5 @@
 import { prisma as db } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant-context";
 import PrestamosClient from "./PrestamosClient";
 import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
@@ -6,8 +7,11 @@ import { Loader2 } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function PrestamosPage() {
-    // Buscamos todos los préstamos con sus clientes y cuotas
+    const tenant = await getTenantContext();
+
+    // Buscamos todos los préstamos del tenant con sus clientes y cuotas
     const prestamosDb = await db.prestamo.findMany({
+        where: { tenantId: tenant.id },
         orderBy: { fecha_prestamo: 'desc' },
         include: {
             cliente: true,

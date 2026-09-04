@@ -1,4 +1,5 @@
 import { prisma as db } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant-context";
 import CajaClient from "./CajaClient";
 import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
@@ -6,21 +7,28 @@ import { Loader2 } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function CajaPage() {
-    const ventasDb = await db.venta.findMany({ include: { cliente: true, vehiculo: true } });
+    const tenant = await getTenantContext();
+
+    const ventasDb = await db.venta.findMany({
+        where: { tenantId: tenant.id },
+        include: { cliente: true, vehiculo: true }
+    });
 
     // Cuotas de autos cobradas
     const cuotasVentasDb = await db.ventaCuota.findMany({
-        where: { estado: 'PAGADA' },
+        where: { estado: 'PAGADA', tenantId: tenant.id },
         include: { venta: { include: { cliente: true, vehiculo: true } } }
     });
 
-    // Cuotas de préstamos cobradas (¡El código clave para que impacte la plata!)
+    // Cuotas de préstamos cobradas
     const cuotasPrestamosDb = await db.prestamoCuota.findMany({
-        where: { estado: 'PAGADA' },
+        where: { estado: 'PAGADA', tenantId: tenant.id },
         include: { prestamo: { include: { cliente: true } } }
     });
 
-    const movimientosDb = await db.gasto.findMany();
+    const movimientosDb = await db.gasto.findMany({
+        where: { tenantId: tenant.id }
+    });
 
     const transacciones: any[] = [];
 

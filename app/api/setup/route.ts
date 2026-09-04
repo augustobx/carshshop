@@ -3,6 +3,10 @@ import { prisma as db } from '@/lib/prisma';
 import { hashUserPassword } from '@/lib/user-auth';
 
 export async function GET() {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Endpoint deshabilitado en producción por seguridad.' }, { status: 403 });
+  }
+
   try {
     const hashedPassword = await hashUserPassword('123456');
 

@@ -1,4 +1,5 @@
 import { prisma as db } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant-context";
 import CuotasClient from "./CuotasClient";
 import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
@@ -6,14 +7,17 @@ import { Loader2 } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function CuotasPage() {
-    // 1. Buscamos las ventas financiadas
+    const tenant = await getTenantContext();
+
+    // 1. Buscamos las ventas financiadas del tenant
     const ventasFinanciadas = await db.venta.findMany({
-        where: { forma_pago: 'Cuotas' },
+        where: { tenantId: tenant.id, forma_pago: 'Cuotas' },
         include: { cliente: true, vehiculo: true, cuotas: { orderBy: { numero_cuota: 'asc' } } }
     });
 
-    // 2. Buscamos los préstamos personales activos
+    // 2. Buscamos los préstamos personales activos del tenant
     const prestamosActivos = await db.prestamo.findMany({
+        where: { tenantId: tenant.id },
         include: { cliente: true, cuotas: { orderBy: { numero_cuota: 'asc' } } }
     });
 

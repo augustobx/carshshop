@@ -1,13 +1,15 @@
 import { prisma as db } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant-context";
 import VehiculoMobileClient from "./VehiculoMobileClient";
 import { notFound } from "next/navigation";
 
 export default async function PWAVehiculoPage({ params }: { params: Promise<{ id: string }> }) {
     const resolvedParams = await params;
+    const tenant = await getTenantContext();
 
-    // Agregamos el "include" para traer el historial de notas y sus autores
+    // Agregamos el "include" para traer el historial de notas y sus autores, aislado por tenant
     const vehiculoDb = await db.vehiculo.findUnique({
-        where: { id_vehiculo: parseInt(resolvedParams.id) },
+        where: { id_vehiculo: parseInt(resolvedParams.id), tenantId: tenant.id },
         include: {
             anotaciones: { include: { usuario: true }, orderBy: { fecha: 'desc' } }
         }

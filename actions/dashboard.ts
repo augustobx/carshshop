@@ -1,14 +1,17 @@
-"use server"
+"use server";
 
-import { prisma } from "../lib/prisma";
+import { prisma } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant-context";
 
 export async function getDashboardData() {
+  const tenant = await getTenantContext();
+
   const [vehiculosProceso, vehiculosListos, ventas, gastos, cuotasArray] = await Promise.all([
-    prisma.vehiculo.count({ where: { estado: 'EN_PREPARACION' } }),
-    prisma.vehiculo.count({ where: { estado: 'LISTO_PARA_VENTA' } }),
-    prisma.venta.count(),
-    prisma.gasto.findMany(),
-    prisma.ventaCuota.findMany()
+    prisma.vehiculo.count({ where: { tenantId: tenant.id, estado: 'EN_PREPARACION' } }),
+    prisma.vehiculo.count({ where: { tenantId: tenant.id, estado: 'LISTO_PARA_VENTA' } }),
+    prisma.venta.count({ where: { tenantId: tenant.id } }),
+    prisma.gasto.findMany({ where: { tenantId: tenant.id } }),
+    prisma.ventaCuota.findMany({ where: { venta: { tenantId: tenant.id } } })
   ]);
 
   const totalGastos = gastos.reduce((sum, g) => sum + Number(g.monto_usd), 0);
@@ -29,3 +32,4 @@ export async function getDashboardData() {
     ]
   };
 }
+

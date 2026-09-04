@@ -1,4 +1,5 @@
 import { prisma as db } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant-context";
 import { notFound } from "next/navigation";
 import ClienteCarpetaClient from "./ClienteCarpetaClient";
 
@@ -10,9 +11,11 @@ export default async function DetalleClientePage({ params }: { params: Promise<{
 
     if (isNaN(idCliente)) notFound();
 
-    // Traemos TODA la vida del cliente en la agencia
+    const tenant = await getTenantContext();
+
+    // Traemos TODA la vida del cliente en la agencia, aislado por tenant
     const clienteDb = await db.cliente.findUnique({
-        where: { id_cliente: idCliente },
+        where: { id_cliente: idCliente, tenantId: tenant.id },
         include: {
             ventas: {
                 include: { vehiculo: true },

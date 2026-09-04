@@ -1,4 +1,5 @@
 import { prisma as db } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant-context";
 import VentasClient from "./VentasClient";
 import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
@@ -6,7 +7,10 @@ import { Loader2 } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function VentasPage() {
+    const tenant = await getTenantContext();
+
     const ventasDb = await db.venta.findMany({
+        where: { tenantId: tenant.id },
         orderBy: { fecha_venta: 'desc' },
         include: {
             cliente: true,

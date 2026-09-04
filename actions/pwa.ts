@@ -1,12 +1,14 @@
 'use server';
 
 import { prisma as db } from '@/lib/prisma';
+import { getTenantContext } from '@/lib/tenant-context';
 import { revalidatePath } from 'next/cache';
 
 export async function guardarNotaVehiculo(id_vehiculo: number, nota: string) {
     try {
+        const tenant = await getTenantContext();
         await db.vehiculo.update({
-            where: { id_vehiculo },
+            where: { id_vehiculo, tenantId: tenant.id },
             data: { notas_internas: nota }
         });
 

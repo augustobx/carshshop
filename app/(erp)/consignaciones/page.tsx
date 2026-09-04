@@ -1,4 +1,5 @@
 import { prisma as db } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant-context";
 import ConsignacionesClient from "./ConsignacionesClient";
 import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
@@ -6,15 +7,18 @@ import { Loader2 } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function ConsignacionesPage() {
-    // Traemos los clientes para el buscador
+    const tenant = await getTenantContext();
+
+    // Traemos los clientes del tenant para el buscador
     const clientesDb = await db.cliente.findMany({
+        where: { tenantId: tenant.id },
         orderBy: { nombre_completo: 'asc' }
     });
 
-    // Traemos las consignaciones INCLUYENDO al cliente dueño
+    // Traemos las consignaciones del tenant INCLUYENDO al cliente dueño
     const consignacionesDb = await db.vehiculo.findMany({
-        where: { tipo_ingreso: 'CONSIGNACION' },
-        include: { cliente: true }, // <- NUEVO
+        where: { tenantId: tenant.id, tipo_ingreso: 'Consignacion' },
+        include: { cliente: true },
         orderBy: { fecha_ingreso: 'desc' }
     });
 

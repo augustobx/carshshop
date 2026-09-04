@@ -1,17 +1,22 @@
 import { prisma as db } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant-context";
 import CotizadorClient from "./CotizadorClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function NuevaVentaPage() {
+    const tenant = await getTenantContext();
+
     const vehiculosDb = await db.vehiculo.findMany({
         where: {
+            tenantId: tenant.id,
             estado: { in: ['LISTO_PARA_VENTA', 'SENADO'] }
         },
         orderBy: { marca: 'asc' }
     });
 
     const clientesDb = await db.cliente.findMany({
+        where: { tenantId: tenant.id },
         orderBy: { nombre_completo: 'asc' }
     });
 

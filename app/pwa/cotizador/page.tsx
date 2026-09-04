@@ -1,4 +1,5 @@
 import { prisma as db } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant-context";
 import CotizadorMobileClient from "./CotizadorMobileClient";
 import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
@@ -6,15 +7,19 @@ import { Loader2 } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function PWACotizadorPage() {
-    // Buscamos solo autos que se puedan vender (usando los estados exactos de tu base de datos)
+    const tenant = await getTenantContext();
+
+    // Buscamos solo autos que se puedan vender del tenant
     const vehiculosDb = await db.vehiculo.findMany({
         where: {
+            tenantId: tenant.id,
             estado: { in: ['LISTO_PARA_VENTA', 'EN_CONSIGNACION'] }
         },
         orderBy: { marca: 'asc' }
     });
 
     const clientesDb = await db.cliente.findMany({
+        where: { tenantId: tenant.id },
         orderBy: { nombre_completo: 'asc' }
     });
 
