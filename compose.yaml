@@ -1,5 +1,6 @@
 name: onlycars
 
+# Compose local/directo. Producción detrás de Nginx Proxy Manager usa compose.npm.yaml.
 services:
   db:
     image: mariadb:11.8
@@ -9,8 +10,8 @@ services:
     environment:
       MARIADB_DATABASE: ${DB_NAME:-onlycars}
       MARIADB_USER: ${DB_USER:-onlycars}
-      MARIADB_PASSWORD: ${DB_PASSWORD:-onlycars_pass}
-      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-onlycars_root_pass}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?Definir DB_PASSWORD en el archivo de entorno}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Definir DB_ROOT_PASSWORD en el archivo de entorno}
       TZ: ${TZ:-America/Argentina/Buenos_Aires}
     command: ["--log-bin=mysql-bin", "--binlog-format=ROW", "--expire-logs-days=7", "--server-id=1"]
     volumes:
@@ -29,8 +30,13 @@ services:
       context: .
       target: database-init
     environment:
-      DATABASE_URL: mysql://${DB_USER:-onlycars}:${DB_PASSWORD:-onlycars_pass}@db:3306/${DB_NAME:-onlycars}
+      DATABASE_URL: mysql://${DB_USER:-onlycars}:${DB_PASSWORD}@db:3306/${DB_NAME:-onlycars}
       BASE_DOMAIN: ${BASE_DOMAIN:-onlycars.nanoapps.ar}
+      TZ: ${TZ:-America/Argentina/Buenos_Aires}
+      SEED_SUPERADMIN_EMAIL: ${SEED_SUPERADMIN_EMAIL:-desa@nanolabs.com.ar}
+      SEED_SUPERADMIN_PASSWORD: ${SEED_SUPERADMIN_PASSWORD:-}
+      SEED_DEMO_ADMIN_EMAIL: ${SEED_DEMO_ADMIN_EMAIL:-admin@carshop.com}
+      SEED_DEMO_ADMIN_PASSWORD: ${SEED_DEMO_ADMIN_PASSWORD:-}
     depends_on:
       db: { condition: service_healthy }
     restart: "no"
@@ -43,7 +49,7 @@ services:
     ports:
       - "${PORT:-3000}:3000"
     environment:
-      DATABASE_URL: mysql://${DB_USER:-onlycars}:${DB_PASSWORD:-onlycars_pass}@db:3306/${DB_NAME:-onlycars}
+      DATABASE_URL: mysql://${DB_USER:-onlycars}:${DB_PASSWORD}@db:3306/${DB_NAME:-onlycars}
       BASE_DOMAIN: ${BASE_DOMAIN:-onlycars.nanoapps.ar}
       BASE_URL: ${BASE_URL:-http://localhost:3000}
       TZ: ${TZ:-America/Argentina/Buenos_Aires}
