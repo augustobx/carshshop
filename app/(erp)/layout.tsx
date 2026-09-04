@@ -1,24 +1,15 @@
-import Sidebar from "@/components/Sidebar";
-import TopBar from "@/components/TopBar";
-import { getTenantContext } from "@/lib/tenant-context";
-import { getLoggedUser } from "@/lib/user-auth";
-import { notFound, redirect } from "next/navigation";
+import Sidebar from '@/components/Sidebar';
+import TopBar from '@/components/TopBar';
+import { getTenantContext } from '@/lib/tenant-context';
+import { getLoggedUser } from '@/lib/user-auth';
+import { notFound, redirect } from 'next/navigation';
 
 export default async function ERPLayout({ children }: { children: React.ReactNode }) {
   let tenant;
-
-  try {
-    tenant = await getTenantContext();
-  } catch (error) {
-    console.error("[ERP Tenant Context Error]:", error);
-    notFound();
-  }
+  try { tenant = await getTenantContext(); } catch (error) { console.error('[ERP Tenant Context Error]:', error); notFound(); }
 
   const user = await getLoggedUser();
-  if (!user) {
-    redirect('/login');
-  }
-
+  if (!user) redirect('/login');
   const membership = user.memberships.find((m) => m.tenantId === tenant.id);
   if (!user.isSuperAdmin && !membership) {
     console.warn(`[SECURITY] User ${user.id} attempted tenant access without membership: ${tenant.id}`);
@@ -26,45 +17,20 @@ export default async function ERPLayout({ children }: { children: React.ReactNod
   }
 
   const currentRole = user.isSuperAdmin ? 'OWNER' : membership?.role || 'VENDEDOR';
+  const canConfigure = user.isSuperAdmin || ['OWNER', 'MANAGER'].includes(currentRole);
+  const canSyncDolar = user.isSuperAdmin || ['OWNER', 'MANAGER', 'ADMINISTRATIVO'].includes(currentRole);
   const initialDolar = tenant.settings?.dolarActual ?? 1400;
-  const initialTipo = tenant.settings?.tipoDolar ?? "blue";
+  const initialTipo = tenant.settings?.tipoDolar ?? 'blue';
   const initialLogo = tenant.settings?.logoUrl ?? null;
-  const brandPrimary = tenant.settings?.primaryColor ?? "#2563eb";
+  const brandPrimary = tenant.settings?.primaryColor ?? '#2563eb';
+  const themeStyles = `:root { --color-brand: ${brandPrimary}; --color-brand-hover: ${brandPrimary}ee; --color-brand-ring: ${brandPrimary}33; }`;
 
-  const themeStyles = `
-    :root {
-      --color-brand: ${brandPrimary};
-      --color-brand-hover: ${brandPrimary}ee;
-      --color-brand-ring: ${brandPrimary}33;
-    }
-  `;
-
-  return (
-    <div className="flex min-h-screen bg-slate-50 text-slate-900 font-sans">
-      <style dangerouslySetInnerHTML={{ __html: themeStyles }} />
-
-      <div className="print:hidden">
-        <Sidebar
-          tenantName={tenant.name}
-          tenantLogo={initialLogo}
-          isSuperAdmin={user.isSuperAdmin}
-          currentRole={currentRole}
-        />
-      </div>
-
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        <div className="print:hidden">
-          <TopBar
-            initialDolar={initialDolar}
-            initialTipo={initialTipo}
-            initialLogo={initialLogo}
-            tenantName={tenant.name}
-            isSuperAdmin={user.isSuperAdmin}
-          />
-        </div>
-
-        <div className="flex-1 overflow-y-auto">{children}</div>
-      </main>
-    </div>
-  );
+  return <div className="flex min-h-screen bg-slate-50 text-slate-900 font-sans">
+    <style dangerouslySetInnerHTML={{ __html: themeStyles }} />
+    <div className="print:hidden"><Sidebar tenantName={tenant.name} tenantLogo={initialLogo} isSuperAdmin={user.isSuperAdmin} currentRole={currentRole} /></div>
+    <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+      <div className="print:hidden"><TopBar initialDolar={initialDolar} initialTipo={initialTipo} initialLogo={initialLogo} tenantName={tenant.name} isSuperAdmin={user.isSuperAdmin} canConfigure={canConfigure} canSyncDolar={canSyncDolar} /></div>
+      <div className="flex-1 overflow-y-auto">{children}</div>
+    </main>
+  </div>;
 }
