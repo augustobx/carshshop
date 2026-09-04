@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { RolMembresia } from '@prisma/client';
 import { getTenantContext } from '@/lib/tenant-context';
 import { requireTenantRole } from '@/lib/user-auth';
+import { prisma as db } from '@/lib/prisma';
 import ConfiguracionClient from './ConfiguracionClient';
 
 export const dynamic = 'force-dynamic';
@@ -14,7 +15,7 @@ export default async function ConfiguracionPage() {
     redirect('/');
   }
 
-  const s = tenant.settings;
+  const s = await db.tenantSettings.findUnique({ where: { tenantId: tenant.id } });
   return <ConfiguracionClient initial={{
     tenantName: tenant.name,
     appName: s?.appName || tenant.name,
@@ -28,9 +29,9 @@ export default async function ConfiguracionPage() {
     telefonoContacto: s?.telefonoContacto || tenant.phone || '',
     emailContacto: s?.emailContacto || tenant.email || '',
     whatsappLead: s?.whatsappLead || '',
-    cuit: tenant.cuit || '',
-    razonSocial: tenant.name,
-    direccion: tenant.address || '',
-    pieImpresion: '',
+    cuit: s?.cuit || tenant.cuit || '',
+    razonSocial: s?.razonSocial || tenant.name,
+    direccion: s?.direccion || tenant.address || '',
+    pieImpresion: s?.pieImpresion || '',
   }} />;
 }
