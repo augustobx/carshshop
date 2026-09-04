@@ -1,69 +1,90 @@
 import { getLoggedUser } from '@/lib/user-auth';
-import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { Building2, LogOut, Car } from 'lucide-react';
 import { logoutAction } from '@/actions/auth';
+import {
+  Car,
+  LayoutDashboard,
+  Building2,
+  Layers3,
+  LogOut,
+  ShieldCheck,
+  ExternalLink,
+} from 'lucide-react';
 
 export default async function SuperAdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getLoggedUser();
 
-  if (!user || !user.isSuperAdmin) {
-    redirect('/login?error=superadmin_required');
-  }
+  // /superadmin/login debe seguir siendo público. Cada página protegida valida SuperAdmin.
+  if (!user?.isSuperAdmin) return children;
 
   const handleLogout = async () => {
     'use server';
     await logoutAction();
   };
 
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      <header className="h-16 border-b border-slate-800 bg-slate-900/80 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-50">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black shadow-lg shadow-blue-500/20">
-              <Car className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="font-black text-lg tracking-tight text-white">OnlyCars</span>
-              <span className="text-[10px] uppercase tracking-widest font-black ml-2 px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                NanoLabs SuperAdmin
-              </span>
-            </div>
-          </div>
+  const navItems = [
+    { href: '/superadmin', label: 'Métricas', icon: LayoutDashboard },
+    { href: '/superadmin/tenants', label: 'Concesionarias / Tenants', icon: Building2 },
+    { href: '/superadmin/planes', label: 'Planes SaaS', icon: Layers3 },
+  ];
 
-          <nav className="hidden md:flex items-center gap-1 ml-8">
-            <Link
-              href="/superadmin"
-              className="px-3.5 py-2 rounded-lg text-sm font-semibold text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors flex items-center gap-2"
-            >
-              <Building2 className="w-4 h-4 text-blue-400" />
-              Concesionarias
-            </Link>
-          </nav>
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex font-sans">
+      <aside className="hidden md:flex w-72 shrink-0 border-r border-slate-800 bg-slate-950 flex-col sticky top-0 h-screen">
+        <div className="h-20 px-5 border-b border-slate-800 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-950/40">
+            <Car className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-black text-lg text-white tracking-tight">OnlyCars</span>
+              <span className="text-[9px] uppercase tracking-widest font-black px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/20">SaaS</span>
+            </div>
+            <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500 font-black">NanoLabs Control Plane</p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="text-right hidden sm:block">
-            <p className="text-xs font-bold text-white">{user.name || user.email}</p>
-            <p className="text-[10px] text-blue-400 font-mono">SuperAdmin Maestro</p>
-          </div>
+        <nav className="flex-1 px-3 py-5 space-y-1">
+          <p className="px-3 pb-2 text-[10px] uppercase tracking-[0.18em] font-black text-slate-600">Plataforma</p>
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <Link key={item.href} href={item.href} className="flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-bold text-slate-400 hover:bg-slate-900 hover:text-white transition-colors">
+                <Icon className="w-4 h-4 text-indigo-400" />
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
 
+        <div className="p-3 border-t border-slate-800 space-y-2">
+          <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2.5">
+            <div className="flex items-center gap-2 text-emerald-400 text-[10px] uppercase tracking-wider font-black">
+              <ShieldCheck className="w-3.5 h-3.5" /> SuperAdmin activo
+            </div>
+            <p className="text-xs font-semibold text-slate-300 mt-1 truncate">{user.name || user.email}</p>
+          </div>
+          <Link href="/" className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:bg-slate-900 hover:text-white">
+            <ExternalLink className="w-4 h-4" /> Ir a OnlyCars
+          </Link>
           <form action={handleLogout}>
-            <button
-              type="submit"
-              className="p-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800 transition-colors cursor-pointer"
-              title="Cerrar sesión de plataforma"
-            >
-              <LogOut className="w-5 h-5" />
+            <button type="submit" className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-bold text-red-400 hover:bg-red-950/20 hover:text-red-300">
+              <LogOut className="w-4 h-4" /> Cerrar sesión
             </button>
           </form>
         </div>
-      </header>
+      </aside>
 
-      <main className="flex-1 p-6 max-w-7xl w-full mx-auto">
-        {children}
-      </main>
+      <div className="flex-1 min-w-0">
+        <header className="md:hidden h-16 px-4 border-b border-slate-800 bg-slate-950/95 backdrop-blur sticky top-0 z-50 flex items-center justify-between">
+          <Link href="/superadmin" className="flex items-center gap-2 font-black text-white"><Car className="w-5 h-5 text-indigo-400" /> OnlyCars SaaS</Link>
+          <div className="flex items-center gap-1">
+            <Link href="/superadmin/tenants" className="p-2 rounded-lg text-slate-400 hover:bg-slate-900" aria-label="Tenants"><Building2 className="w-4 h-4" /></Link>
+            <Link href="/superadmin/planes" className="p-2 rounded-lg text-slate-400 hover:bg-slate-900" aria-label="Planes"><Layers3 className="w-4 h-4" /></Link>
+          </div>
+        </header>
+        <main className="p-4 md:p-8 max-w-[1500px] mx-auto">{children}</main>
+      </div>
     </div>
   );
 }
