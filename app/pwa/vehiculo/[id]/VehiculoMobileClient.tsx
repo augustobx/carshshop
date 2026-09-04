@@ -89,7 +89,7 @@ export default function VehiculoMobileClient({ vehiculo, dolarActual, pwaConfig 
       </main>
 
       <div className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 p-4 pb-safe">
-        <Link href={`/pwa/cotizador?v=${vehiculo.id_vehiculo}`} className="w-full bg-[var(--color-brand,#4f46e5)] text-white p-4 rounded-2xl font-black flex justify-center items-center gap-2 active:scale-95 transition-all shadow-lg shadow-indigo-600/30"><Calculator className="w-6 h-6" />{pwaConfig.allowCloseSales ? 'Cotizar / vender' : 'Simular cotización'}</Link>
+        <Link href={`/pwa/cotizador?v=${vehiculo.id_vehiculo}`} className="w-full bg-[var(--color-brand,#4f46e5)] text-white p-4 rounded-2xl font-black flex justify-center items-center gap-2 active:scale-95 transition-all shadow-lg shadow-indigo-600/30"><Calculator className="w-6 h-6" /> Crear cotización</Link>
       </div>
     </div>
   );
