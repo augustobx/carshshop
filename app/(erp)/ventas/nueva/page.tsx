@@ -4,11 +4,14 @@ import CotizadorClient from "./CotizadorClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function NuevaVentaPage() {
+export default async function NuevaVentaPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+    const params = await searchParams;
     const tenant = await getTenantContext();
     const dolarActual = Number(tenant.settings?.dolarActual || 1400);
+    const quoteId = Number(typeof params.q === 'string' ? params.q : 0);
+    const prospectoId = Number(typeof params.p === 'string' ? params.p : 0);
 
-    const [vehiculosDb, clientesDb] = await Promise.all([
+    const [vehiculosDb, clientesDb, quoteDb] = await Promise.all([
         db.vehiculo.findMany({
             where: {
                 tenantId: tenant.id,
@@ -19,7 +22,10 @@ export default async function NuevaVentaPage() {
         db.cliente.findMany({
             where: { tenantId: tenant.id },
             orderBy: { nombre_completo: 'asc' }
-        })
+        }),
+        quoteId > 0
+            ? db.cotizacion.findFirst({ where: { id_cotizacion: quoteId, tenantId: tenant.id } })
+            : Promise.resolve(null),
     ]);
 
     const vehiculos = vehiculosDb.map(v => ({
@@ -46,5 +52,30 @@ export default async function NuevaVentaPage() {
         email: c.email,
     }));
 
-    return <CotizadorClient vehiculos={vehiculos} clientes={clientes} dolarActual={dolarActual} />;
+    const initialQuote = quoteDb ? {
+        id_cotizacion: quoteDb.id_cotizacion,
+        prospectoId: quoteDb.prospectoId,
+        id_cliente: quoteDb.id_cliente,
+        id_vehiculo: quoteDb.id_vehiculo,
+        precio_final_usd: Number(quoteDb.precio_final_usd),
+        cotizacion_dolar: Number(quoteDb.cotizacion_dolar),
+        forma_pago: quoteDb.forma_pago,
+        anticipo_usd: Number(quoteDb.anticipo_usd || 0),
+        saldo_financiado_usd: Number(quoteDb.saldo_financiado_usd || 0),
+        cantidad_cuotas: quoteDb.cantidad_cuotas,
+        valor_cuota_usd: Number(quoteDb.valor_cuota_usd || 0),
+        tiene_permuta: quoteDb.tiene_permuta,
+        valor_permuta_usd: Number(quoteDb.valor_permuta_usd || 0),
+        observaciones: quoteDb.observaciones,
+    } : null;
+
+    return (
+        <CotizadorClient
+            vehiculos={vehiculos}
+            clientes={clientes}
+            dolarActual={dolarActual}
+            initialProspectoId={prospectoId || initialQuote?.prospectoId || null}
+            initialQuote={initialQuote}
+        />
+    );
 }
