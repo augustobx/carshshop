@@ -32,6 +32,8 @@ export default function TenantsManagerClient({
     };
     tenants: any[];
     plans: any[];
+    tenantBaseDomain?: string;
+    platformHost?: string;
   };
 }) {
   const [tenants, setTenants] = useState(initialData.tenants);
@@ -40,7 +42,8 @@ export default function TenantsManagerClient({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Form state
+  const tenantBaseDomain = initialData.tenantBaseDomain || 'nanoapps.ar';
+
   const [form, setForm] = useState({
     name: '',
     slug: '',
@@ -89,7 +92,6 @@ export default function TenantsManagerClient({
 
   return (
     <div className="space-y-8">
-      {/* Tarjetas de Métricas de Plataforma */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
@@ -132,7 +134,6 @@ export default function TenantsManagerClient({
         </div>
       </div>
 
-      {/* Barra de Acciones y Búsqueda */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -154,7 +155,6 @@ export default function TenantsManagerClient({
         </button>
       </div>
 
-      {/* Tabla de Concesionarias */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-sm">
@@ -178,7 +178,8 @@ export default function TenantsManagerClient({
                 </tr>
               ) : (
                 filteredTenants.map((t) => {
-                  const primaryDomain = t.domains.find((d: any) => d.isPrimary)?.hostname || `${t.slug}.onlycars.nanoapps.ar`;
+                  const primaryDomain =
+                    t.domains.find((d: any) => d.isPrimary)?.hostname || `${t.slug}.${tenantBaseDomain}`;
                   const planName = t.subscription?.plan?.name || 'Starter';
 
                   return (
@@ -254,7 +255,6 @@ export default function TenantsManagerClient({
         </div>
       </div>
 
-      {/* Modal Nueva Concesionaria */}
       {isCreateOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 sm:p-8 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
@@ -314,6 +314,9 @@ export default function TenantsManagerClient({
                     onChange={(e) => setForm({ ...form, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-blue-500"
                   />
+                  <p className="mt-1.5 text-[11px] text-slate-500 font-mono">
+                    {form.slug || 'slug'}.{tenantBaseDomain}
+                  </p>
                 </div>
 
                 <div>
