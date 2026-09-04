@@ -13,9 +13,9 @@ datasource db {
 
 model Tenant {
   id          String   @id @default(uuid())
-  slug        String   @unique // ej: "demo", "autonorte", "premiumcars"
-  name        String   // ej: "AutoNorte Concesionaria"
-  status      String   @default("ACTIVE") // ACTIVE, TRIAL, PAST_DUE, SUSPENDED, CANCELLED
+  slug        String   @unique
+  name        String
+  status      String   @default("ACTIVE")
   email       String?
   phone       String?
   address     String?
@@ -24,16 +24,14 @@ model Tenant {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  domains      TenantDomain[]
-  subscription Subscription?
-  locations    Location[]
-  memberships  TenantMembership[]
-  features     TenantFeature[]
-  settings     TenantSettings?
-  auditLogs    PlatformAuditLog[]
-  saasPayments SaaSPayment[]
-
-  // Relaciones con entidades de la concesionaria
+  domains       TenantDomain[]
+  subscription  Subscription?
+  locations     Location[]
+  memberships   TenantMembership[]
+  features      TenantFeature[]
+  settings      TenantSettings?
+  auditLogs     PlatformAuditLog[]
+  saasPayments  SaaSPayment[]
   vehiculos     Vehiculo[]
   clientes      Cliente[]
   ventas        Venta[]
@@ -46,6 +44,8 @@ model Tenant {
   anotaciones   Anotacion[]
   fotos         VehiculoFoto[]
   prospectos    Prospecto[]
+  cotizaciones  Cotizacion[]
+  entregas      Entrega[]
   cashSessions  CashSession[]
   cashMovements CashMovement[]
 
@@ -56,7 +56,7 @@ model Tenant {
 model TenantDomain {
   id         String    @id @default(uuid())
   tenantId   String
-  hostname   String    @unique // ej: "autonorte.onlycars.nanoapps.ar" o "autos.autonorte.com.ar"
+  hostname   String    @unique
   isPrimary  Boolean   @default(false)
   isCustom   Boolean   @default(false)
   verifiedAt DateTime?
@@ -70,13 +70,13 @@ model TenantDomain {
 
 model Plan {
   id           String   @id @default(uuid())
-  code         String   @unique // "STARTER", "PRO", "ENTERPRISE"
+  code         String   @unique
   name         String
   priceMonthly Float    @default(0)
   maxVehicles  Int      @default(50)
   maxLocations Int      @default(1)
   maxUsers     Int      @default(5)
-  features     Json     // Lista o flags de features disponibles
+  features     Json
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -88,7 +88,7 @@ model Subscription {
   id                 String    @id @default(uuid())
   tenantId           String    @unique
   planId             String
-  status             String    @default("ACTIVE") // TRIAL, ACTIVE, PAST_DUE, SUSPENDED, CANCELED
+  status             String    @default("ACTIVE")
   trialEndsAt        DateTime?
   currentPeriodStart DateTime  @default(now())
   currentPeriodEnd   DateTime
@@ -108,8 +108,8 @@ model SaaSPayment {
   subscriptionId String
   amount         Float
   currency       String    @default("USD")
-  status         String    @default("PAID") // PENDING, PAID, OVERDUE, CANCELLED
-  method         String?   // Transferencia, Tarjeta, Efectivo
+  status         String    @default("PAID")
+  method         String?
   reference      String?
   notes          String?
   paidAt         DateTime?
@@ -128,7 +128,7 @@ model SaaSPayment {
 model TenantFeature {
   id         String   @id @default(uuid())
   tenantId   String
-  featureKey String   // "crm_leads", "multi_location", "loans_module", "custom_domain", "whatsapp_api"
+  featureKey String
   isEnabled  Boolean  @default(true)
   config     Json?
   createdAt  DateTime @default(now())
@@ -150,7 +150,7 @@ model TenantSettings {
   dolarActual          Float    @default(1400)
   tipoDolar            String   @default("blue")
   tnaFinanciacion      Float    @default(48.0)
-  comisionVentaDefecto Float    @default(3.0) // % de comisión vendedor
+  comisionVentaDefecto Float    @default(3.0)
   telefonoContacto     String?
   emailContacto        String?
   whatsappLead         String?
@@ -195,11 +195,12 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  memberships TenantMembership[]
-  sessions    UserSession[]
-  auditLogs   PlatformAuditLog[]
-  ventas      Venta[]
-  anotaciones Anotacion[]
+  memberships  TenantMembership[]
+  sessions     UserSession[]
+  auditLogs    PlatformAuditLog[]
+  ventas       Venta[]
+  cotizaciones Cotizacion[]
+  anotaciones  Anotacion[]
 }
 
 model TenantMembership {
@@ -243,14 +244,14 @@ enum RolMembresia {
 }
 
 // ==========================================
-// 3. SUCURSALES (MULTI-LOCATION PARA GRANDES AGENCIAS)
+// 3. SUCURSALES
 // ==========================================
 
 model Location {
   id        String   @id @default(uuid())
   tenantId  String
-  name      String   // ej: "Casa Central", "Salón Norte", "Playa de Almacenamiento"
-  code      String   // ej: "central", "norte"
+  name      String
+  code      String
   address   String?
   phone     String?
   isMain    Boolean  @default(false)
@@ -275,44 +276,38 @@ model Location {
 // ==========================================
 
 model Vehiculo {
-  id_vehiculo             Int            @id @default(autoincrement())
-  tenantId                String
-  locationId              String?
-
-  marca                   String?
-  modelo                  String?
-  version                 String?
-  anio                    Int?
-  transmision             String?
-  traccion                String?
-  puertas                 Int?
-  motor                   String?
-  combustible             String?
-  cilindrada              String?
-  color                   String?
-  km                      Int?
-  patente                 String?
-  vin                     String?
-  tipo_vehiculo           String         @default("Auto") // Auto, Moto, Camioneta, Utilitario, Camion
-  tipo_ingreso            String?        @default("Propio") // Propio, Consignacion, Permuta
-
-  precio_compra_usd       Decimal?       @db.Decimal(10, 2)
-  precio_compra_ars       Decimal?       @db.Decimal(12, 2)
-  precio_venta_usd        Decimal?       @db.Decimal(10, 2)
-  precio_venta_ars        Decimal?       @db.Decimal(12, 2)
-
-  // Costeo real para grandes concesionarias
-  gastos_preparacion_usd  Decimal?       @default(0) @db.Decimal(10, 2)
-  gastos_gestoria_usd     Decimal?       @default(0) @db.Decimal(10, 2)
-  costo_total_real_usd    Decimal?       @default(0) @db.Decimal(10, 2)
-
-  estado                  EstadoVehiculo @default(EN_PREPARACION)
-  fecha_ingreso           DateTime       @default(now())
-  comision_consignacion_pct Decimal?     @db.Decimal(5, 2)
-  notas_internas          String?        @db.Text
-
-  id_cliente              Int?           // Titular anterior o consignador
-  permuta_de_venta_id     Int?           // Si fue tomado como permuta de una venta previa
+  id_vehiculo               Int            @id @default(autoincrement())
+  tenantId                  String
+  locationId                String?
+  marca                     String?
+  modelo                    String?
+  version                   String?
+  anio                      Int?
+  transmision               String?
+  traccion                  String?
+  puertas                   Int?
+  motor                     String?
+  combustible               String?
+  cilindrada                String?
+  color                     String?
+  km                        Int?
+  patente                   String?
+  vin                       String?
+  tipo_vehiculo             String         @default("Auto")
+  tipo_ingreso              String?        @default("Propio")
+  precio_compra_usd         Decimal?       @db.Decimal(10, 2)
+  precio_compra_ars         Decimal?       @db.Decimal(12, 2)
+  precio_venta_usd          Decimal?       @db.Decimal(10, 2)
+  precio_venta_ars          Decimal?       @db.Decimal(12, 2)
+  gastos_preparacion_usd    Decimal?       @default(0) @db.Decimal(10, 2)
+  gastos_gestoria_usd       Decimal?       @default(0) @db.Decimal(10, 2)
+  costo_total_real_usd      Decimal?       @default(0) @db.Decimal(10, 2)
+  estado                    EstadoVehiculo @default(EN_PREPARACION)
+  fecha_ingreso             DateTime       @default(now())
+  comision_consignacion_pct Decimal?       @db.Decimal(5, 2)
+  notas_internas            String?        @db.Text
+  id_cliente                Int?
+  permuta_de_venta_id       Int?
 
   tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   location     Location?      @relation(fields: [locationId], references: [id], onDelete: SetNull)
@@ -324,6 +319,7 @@ model Vehiculo {
   fotos        VehiculoFoto[]
   anotaciones  Anotacion[]
   prospectos   Prospecto[]
+  cotizaciones Cotizacion[]
 
   @@unique([tenantId, patente])
   @@index([tenantId, estado])
@@ -335,7 +331,7 @@ model VehiculoFoto {
   id_foto     Int      @id @default(autoincrement())
   tenantId    String
   id_vehiculo Int
-  url_foto    String   // Ruta o URL de Cloudflare R2 / local
+  url_foto    String
   orden       Int      @default(0)
   createdAt   DateTime @default(now())
 
@@ -365,110 +361,158 @@ model Anotacion {
 // ==========================================
 
 model Cliente {
-  id_cliente       Int        @id @default(autoincrement())
-  tenantId         String
-  nombre_completo  String
-  dni              String?
-  cuit_cuil        String?
-  telefono         String?
-  email            String?
-  domicilio        String?
-  localidad        String?
-  provincia        String?
-  notas            String?    @db.Text
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  id_cliente      Int      @id @default(autoincrement())
+  tenantId        String
+  nombre_completo String
+  dni             String?
+  cuit_cuil       String?
+  telefono        String?
+  email           String?
+  domicilio       String?
+  localidad       String?
+  provincia       String?
+  notas           String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  ventas     Venta[]
-  prestamos  Prestamo[]
-  senias     Senia[]
-  vehiculos  Vehiculo[]
-  prospectos Prospecto[]
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ventas       Venta[]
+  prestamos    Prestamo[]
+  senias       Senia[]
+  vehiculos    Vehiculo[]
+  prospectos   Prospecto[]
+  cotizaciones Cotizacion[]
 
   @@unique([tenantId, dni])
   @@index([tenantId, nombre_completo])
 }
 
-// CRM de Prospectos / Leads para grandes concesionarias
 model Prospecto {
-  id_prospecto            Int             @id @default(autoincrement())
-  tenantId                String
-  nombre                  String
-  telefono                String?
-  email                   String?
-  id_vehiculo_interes     Int?
-  id_cliente              Int?
-  vendedorId              String?
-  estado                  EstadoProspecto @default(NUEVO)
-  origen                  String?         @default("SHOWROOM") // SHOWROOM, WEB, WHATSAPP, MERCADOLIBRE
+  id_prospecto             Int             @id @default(autoincrement())
+  tenantId                 String
+  nombre                   String
+  telefono                 String?
+  email                    String?
+  id_vehiculo_interes      Int?
+  id_cliente               Int?
+  vendedorId               String?
+  estado                   EstadoProspecto @default(NUEVO)
+  origen                   String?         @default("SHOWROOM")
   presupuesto_estimado_usd Decimal?        @db.Decimal(10, 2)
-  tiene_permuta           Boolean         @default(false)
-  detalle_permuta         String?
-  notas                   String?         @db.Text
-  fecha_contacto          DateTime        @default(now())
-  proxima_accion          DateTime?
-  createdAt               DateTime        @default(now())
-  updatedAt               DateTime        @updatedAt
+  tiene_permuta            Boolean         @default(false)
+  detalle_permuta          String?
+  notas                    String?         @db.Text
+  fecha_contacto           DateTime        @default(now())
+  proxima_accion           DateTime?
+  createdAt                DateTime        @default(now())
+  updatedAt                DateTime        @updatedAt
 
-  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  vehiculo_interes Vehiculo? @relation(fields: [id_vehiculo_interes], references: [id_vehiculo], onDelete: SetNull)
-  cliente          Cliente?  @relation(fields: [id_cliente], references: [id_cliente], onDelete: SetNull)
+  tenant           Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehiculo_interes Vehiculo?     @relation(fields: [id_vehiculo_interes], references: [id_vehiculo], onDelete: SetNull)
+  cliente          Cliente?      @relation(fields: [id_cliente], references: [id_cliente], onDelete: SetNull)
+  cotizaciones     Cotizacion[]
+  senias           Senia[]
+  ventas           Venta[]
 
   @@index([tenantId, estado])
   @@index([tenantId, fecha_contacto])
+}
+
+model Cotizacion {
+  id_cotizacion        Int              @id @default(autoincrement())
+  tenantId             String
+  prospectoId          Int?
+  id_cliente           Int?
+  id_vehiculo          Int
+  vendedorId           String?
+  estado               EstadoCotizacion @default(ENVIADA)
+  precio_final_usd     Decimal          @db.Decimal(10, 2)
+  cotizacion_dolar     Decimal          @db.Decimal(10, 2)
+  forma_pago           FormaPago        @default(Contado)
+  anticipo_usd         Decimal?         @default(0) @db.Decimal(10, 2)
+  saldo_financiado_usd Decimal?         @default(0) @db.Decimal(10, 2)
+  cantidad_cuotas      Int?
+  valor_cuota_usd      Decimal?         @db.Decimal(10, 2)
+  tiene_permuta        Boolean          @default(false)
+  detalle_permuta      String?
+  valor_permuta_usd    Decimal?         @default(0) @db.Decimal(10, 2)
+  validez_hasta        DateTime?
+  observaciones        String?          @db.Text
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  prospecto  Prospecto? @relation(fields: [prospectoId], references: [id_prospecto], onDelete: SetNull)
+  cliente    Cliente?   @relation(fields: [id_cliente], references: [id_cliente], onDelete: SetNull)
+  vehiculo   Vehiculo   @relation(fields: [id_vehiculo], references: [id_vehiculo])
+  vendedor   User?      @relation(fields: [vendedorId], references: [id], onDelete: SetNull)
+  senias     Senia[]
+  venta      Venta?
+
+  @@index([tenantId, estado, createdAt])
+  @@index([tenantId, prospectoId])
+  @@index([tenantId, id_vehiculo])
 }
 
 enum EstadoProspecto {
   NUEVO
   CONTACTADO
   VISITA_AGENDADA
+  COTIZADO
   NEGOCIACION
   PERMUTANDO
+  RESERVADO
   GANADO
   PERDIDO
 }
 
+enum EstadoCotizacion {
+  BORRADOR
+  ENVIADA
+  ACEPTADA
+  RECHAZADA
+  VENCIDA
+}
+
 // ==========================================
-// 6. VENTAS, PERMUTAS Y FINANCIACIÓN
+// 6. VENTAS, RESERVAS, PERMUTAS Y ENTREGA
 // ==========================================
 
 model Venta {
-  id_venta               Int          @id @default(autoincrement())
+  id_venta               Int       @id @default(autoincrement())
   tenantId               String
   locationId             String?
   id_vehiculo            Int
   id_cliente             Int
-  vendedorId             String?      // Id del User que cerró la venta
-  
-  precio_final_usd       Decimal      @db.Decimal(10, 2)
+  vendedorId             String?
+  prospectoId            Int?
+  cotizacionId           Int?      @unique
+  precio_final_usd       Decimal   @db.Decimal(10, 2)
   forma_pago             FormaPago
-  cotizacion_dolar_venta Decimal?     @db.Decimal(10, 2)
-  fecha_venta            DateTime     @default(now())
+  cotizacion_dolar_venta Decimal?  @db.Decimal(10, 2)
+  fecha_venta            DateTime  @default(now())
+  anticipo_usd           Decimal?  @default(0) @db.Decimal(10, 2)
+  saldo_financiado_usd   Decimal?  @default(0) @db.Decimal(10, 2)
+  comision_vendedor_usd  Decimal?  @default(0) @db.Decimal(10, 2)
+  id_vehiculo_permuta    Int?
+  valor_toma_permuta_usd Decimal?  @default(0) @db.Decimal(10, 2)
+  numero_boleto          String?
+  observaciones          String?   @db.Text
 
-  // Estructura financiera y permuta para concesionarias
-  anticipo_usd           Decimal?     @default(0) @db.Decimal(10, 2)
-  saldo_financiado_usd   Decimal?     @default(0) @db.Decimal(10, 2)
-  comision_vendedor_usd  Decimal?     @default(0) @db.Decimal(10, 2)
-
-  // Datos de Permuta (Toma de auto usado como parte de pago)
-  id_vehiculo_permuta    Int?         // Id del auto tomado (ingresado a stock)
-  valor_toma_permuta_usd Decimal?     @default(0) @db.Decimal(10, 2)
-
-  // Documento formal
-  numero_boleto          String?      // ej: "BOL-2026-0042"
-  observaciones          String?      @db.Text
-
-  tenant     Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  location   Location?    @relation(fields: [locationId], references: [id], onDelete: SetNull)
-  vehiculo   Vehiculo     @relation(fields: [id_vehiculo], references: [id_vehiculo])
-  cliente    Cliente      @relation(fields: [id_cliente], references: [id_cliente])
-  vendedor   User?        @relation(fields: [vendedorId], references: [id], onDelete: SetNull)
-  cuotas     VentaCuota[]
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location    Location?    @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  vehiculo    Vehiculo     @relation(fields: [id_vehiculo], references: [id_vehiculo])
+  cliente     Cliente      @relation(fields: [id_cliente], references: [id_cliente])
+  vendedor    User?        @relation(fields: [vendedorId], references: [id], onDelete: SetNull)
+  prospecto   Prospecto?   @relation(fields: [prospectoId], references: [id_prospecto], onDelete: SetNull)
+  cotizacion  Cotizacion?  @relation(fields: [cotizacionId], references: [id_cotizacion], onDelete: SetNull)
+  cuotas      VentaCuota[]
+  entrega     Entrega?
 
   @@index([tenantId, fecha_venta])
   @@index([tenantId, id_vehiculo])
   @@index([tenantId, id_cliente])
+  @@index([tenantId, prospectoId])
 }
 
 model VentaCuota {
@@ -478,8 +522,7 @@ model VentaCuota {
   numero_cuota      Int
   monto_usd         Decimal
   fecha_vencimiento DateTime
-  estado            String   @default("PENDIENTE") // PENDIENTE, PAGADA, VENCIDA
-
+  estado            String   @default("PENDIENTE")
   monto_pagado_ars  Decimal?
   cotizacion_pago   Decimal?
   fecha_pago        DateTime?
@@ -493,19 +536,18 @@ model VentaCuota {
 }
 
 model Prestamo {
-  id_prestamo               Int             @id @default(autoincrement())
+  id_prestamo               Int      @id @default(autoincrement())
   tenantId                  String
   id_cliente                Int
-  
   capital_entregado_usd     Decimal
   total_devolver_usd        Decimal
   cotizacion_dolar_prestamo Decimal
-  fecha_prestamo            DateTime        @default(now())
-  estado                    String          @default("ACTIVO") // ACTIVO, FINALIZADO
+  fecha_prestamo            DateTime @default(now())
+  estado                    String   @default("ACTIVO")
 
-  tenant    Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cliente   Cliente         @relation(fields: [id_cliente], references: [id_cliente])
-  cuotas    PrestamoCuota[]
+  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cliente Cliente         @relation(fields: [id_cliente], references: [id_cliente])
+  cuotas  PrestamoCuota[]
 
   @@index([tenantId, estado])
 }
@@ -518,7 +560,6 @@ model PrestamoCuota {
   monto_usd         Decimal
   fecha_vencimiento DateTime
   estado            String    @default("PENDIENTE")
-  
   monto_pagado_ars  Decimal?
   cotizacion_pago   Decimal?
   fecha_pago        DateTime?
@@ -532,26 +573,55 @@ model PrestamoCuota {
 }
 
 model Senia {
-  id_senia     Int         @id @default(autoincrement())
-  tenantId     String
-  locationId   String?
-  id_vehiculo  Int
-  id_cliente   Int
-  fecha_senia  DateTime    @default(now())
-  fecha_limite DateTime?
-  monto_usd    Decimal     @db.Decimal(10, 2)
-  monto_ars    Decimal     @db.Decimal(12, 2)
-  cotizacion   Decimal     @db.Decimal(10, 2)
-  estado       EstadoSenia @default(ACTIVA)
-  recibo_nro   String?
-  
-  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  location Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
-  vehiculo Vehiculo  @relation(fields: [id_vehiculo], references: [id_vehiculo], onDelete: Cascade)
-  cliente  Cliente   @relation(fields: [id_cliente], references: [id_cliente])
+  id_senia      Int         @id @default(autoincrement())
+  tenantId      String
+  locationId    String?
+  id_vehiculo   Int
+  id_cliente    Int
+  prospectoId   Int?
+  cotizacionId  Int?
+  fecha_senia   DateTime    @default(now())
+  fecha_limite  DateTime?
+  monto_usd     Decimal     @db.Decimal(10, 2)
+  monto_ars     Decimal     @db.Decimal(12, 2)
+  cotizacion    Decimal     @db.Decimal(10, 2)
+  estado        EstadoSenia @default(ACTIVA)
+  recibo_nro    String?
+
+  tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location       Location?   @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  vehiculo       Vehiculo    @relation(fields: [id_vehiculo], references: [id_vehiculo], onDelete: Cascade)
+  cliente        Cliente     @relation(fields: [id_cliente], references: [id_cliente])
+  prospecto      Prospecto?  @relation(fields: [prospectoId], references: [id_prospecto], onDelete: SetNull)
+  cotizacionRef  Cotizacion? @relation(fields: [cotizacionId], references: [id_cotizacion], onDelete: SetNull)
 
   @@index([tenantId, estado])
   @@index([id_vehiculo])
+  @@index([tenantId, prospectoId])
+}
+
+model Entrega {
+  id_entrega       Int           @id @default(autoincrement())
+  tenantId         String
+  id_venta         Int           @unique
+  estado           EstadoEntrega @default(PENDIENTE)
+  fecha_programada DateTime?
+  fecha_entrega    DateTime?
+  checklist        Json?
+  notas            String?       @db.Text
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  venta  Venta  @relation(fields: [id_venta], references: [id_venta], onDelete: Cascade)
+
+  @@index([tenantId, estado, fecha_programada])
+}
+
+enum EstadoEntrega {
+  PENDIENTE
+  PROGRAMADA
+  ENTREGADA
 }
 
 // ==========================================
@@ -566,7 +636,7 @@ model Tarea {
   estado_tarea EstadoTarea @default(PENDIENTE)
   fecha_inicio DateTime    @default(now())
   fecha_fin    DateTime?
-  
+
   tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vehiculo Vehiculo @relation(fields: [id_vehiculo], references: [id_vehiculo], onDelete: Cascade)
   gastos   Gasto[]
@@ -578,14 +648,14 @@ model Gasto {
   id_gasto        Int      @id @default(autoincrement())
   tenantId        String
   locationId      String?
-  id_vehiculo     Int?     // Si es gasto directo del auto (costeo real)
-  id_tarea        Int?     // Si pertenece a una tarea de taller
+  id_vehiculo     Int?
+  id_tarea        Int?
   descripcion     String
   monto_usd       Decimal  @db.Decimal(10, 2)
   monto_ars       Decimal  @db.Decimal(12, 2)
   fecha           DateTime @default(now())
-  categoria       String?  // Taller, Gestoria, Lavado, Combustible, Impuestos, Fijo
-  tipo_movimiento String?  @default("EGRESO") // INGRESO, EGRESO
+  categoria       String?
+  tipo_movimiento String?  @default("EGRESO")
 
   tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   location Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
@@ -597,22 +667,22 @@ model Gasto {
 }
 
 model CashSession {
-  id              String    @id @default(uuid())
-  tenantId        String
-  locationId      String?
-  businessDate    DateTime  @db.Date
-  status          String    @default("OPEN") // OPEN, CLOSED
-  openingBalanceArs Float   @default(0)
-  openingBalanceUsd Float   @default(0)
+  id                String    @id @default(uuid())
+  tenantId          String
+  locationId        String?
+  businessDate      DateTime  @db.Date
+  status            String    @default("OPEN")
+  openingBalanceArs Float     @default(0)
+  openingBalanceUsd Float     @default(0)
   closingBalanceArs Float?
   closingBalanceUsd Float?
-  openedByName    String?
-  closedByName    String?
-  openedAt        DateTime  @default(now())
-  closedAt        DateTime?
-  notes           String?   @db.Text
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  openedByName      String?
+  closedByName      String?
+  openedAt          DateTime  @default(now())
+  closedAt          DateTime?
+  notes             String?   @db.Text
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   location  Location?      @relation(fields: [locationId], references: [id], onDelete: SetNull)
@@ -625,8 +695,8 @@ model CashMovement {
   id            String   @id @default(uuid())
   tenantId      String
   cashSessionId String
-  type          String   // INGRESO, EGRESO
-  currency      String   @default("ARS") // ARS, USD
+  type          String
+  currency      String   @default("ARS")
   amount        Float
   category      String
   description   String   @db.Text
