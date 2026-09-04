@@ -17,5 +17,9 @@ export async function GET(request: NextRequest) {
   }
 
   const result = await resolveTenantByHostname(domain);
-  return new NextResponse(null, { status: result.success ? 204 : 404 });
+
+  // Los tenants suspendidos/vencidos siguen perteneciendo a OnlyCars y deben
+  // continuar enrutando para poder mostrar /suspendido sin reprovisionar DNS.
+  const belongsToOnlyCars = result.success || (!result.success && result.reason === "SUSPENDED");
+  return new NextResponse(null, { status: belongsToOnlyCars ? 204 : 404 });
 }
