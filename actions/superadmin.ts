@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { requireSuperAdmin, hashUserPassword } from '@/lib/user-auth';
+import { buildTenantHostname, getPlatformHost, getTenantBaseDomain } from '@/lib/domain-config';
 import { revalidatePath } from 'next/cache';
 import { RolMembresia } from '@prisma/client';
 
@@ -42,6 +43,8 @@ export async function getSuperAdminOverviewAction() {
     },
     tenants,
     plans,
+    tenantBaseDomain: getTenantBaseDomain(),
+    platformHost: getPlatformHost(),
   };
 }
 
@@ -61,22 +64,33 @@ export async function createTenantAction(data: {
   try {
     const cleanSlug = data.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
     const cleanEmail = data.adminEmail.trim().toLowerCase();
+    const requestedSubdomain = (data.subdomain || cleanSlug).trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
 
-    // Validar slug
+    if (!cleanSlug || !requestedSubdomain) {
+      return { success: false, error: 'El slug/subdominio es inválido.' };
+    }
+
+    const hostname = buildTenantHostname(requestedSubdomain);
+    if (hostname === getPlatformHost()) {
+      return { success: false, error: 'Ese subdominio está reservado para la plataforma OnlyCars.' };
+    }
+
     const existing = await prisma.tenant.findUnique({ where: { slug: cleanSlug } });
     if (existing) {
       return { success: false, error: `El identificador (slug) "${cleanSlug}" ya está en uso.` };
     }
 
-    // Buscar plan
+    const existingDomain = await prisma.tenantDomain.findUnique({ where: { hostname } });
+    if (existingDomain) {
+      return { success: false, error: `El dominio "${hostname}" ya está en uso.` };
+    }
+
     const plan = await prisma.plan.findUnique({ where: { code: data.planCode } });
     if (!plan) {
       return { success: false, error: 'El plan seleccionado no existe.' };
     }
 
-    // Crear tenant en transacción
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Crear Tenant
       const tenant = await tx.tenant.create({
         data: {
           name: data.name.trim(),
@@ -87,7 +101,6 @@ export async function createTenantAction(data: {
         },
       });
 
-      // 2. Crear Suscripción
       const periodEnd = new Date();
       periodEnd.setMonth(periodEnd.getMonth() + 1);
 
@@ -101,10 +114,6 @@ export async function createTenantAction(data: {
         },
       });
 
-      // 3. Crear Subdominio principal
-      const baseDomain = process.env.BASE_DOMAIN || 'onlycars.nanoapps.ar';
-      const hostname = data.subdomain ? `${data.subdomain.trim().toLowerCase()}.${baseDomain}` : `${cleanSlug}.${baseDomain}`;
-
       await tx.tenantDomain.create({
         data: {
           tenantId: tenant.id,
@@ -114,7 +123,6 @@ export async function createTenantAction(data: {
         },
       });
 
-      // 4. Crear Sucursal inicial (Casa Central)
       const location = await tx.location.create({
         data: {
           tenantId: tenant.id,
@@ -124,7 +132,6 @@ export async function createTenantAction(data: {
         },
       });
 
-      // 5. Configuración visual por defecto
       await tx.tenantSettings.create({
         data: {
           tenantId: tenant.id,
@@ -135,7 +142,6 @@ export async function createTenantAction(data: {
         },
       });
 
-      // 6. Crear o vincular usuario administrador de la concesionaria
       let user = await tx.user.findUnique({ where: { email: cleanEmail } });
       if (!user) {
         const passwordToHash = data.adminPassword || 'Concesionaria2026!';
@@ -150,7 +156,6 @@ export async function createTenantAction(data: {
         });
       }
 
-      // 7. Crear membresía OWNER
       await tx.tenantMembership.create({
         data: {
           tenantId: tenant.id,
@@ -160,14 +165,13 @@ export async function createTenantAction(data: {
         },
       });
 
-      // 8. Log de auditoría
       await tx.platformAuditLog.create({
         data: {
           tenantId: tenant.id,
           userId: superAdmin.id,
           action: 'TENANT_CREATED',
           resource: 'Tenant',
-          details: { name: tenant.name, slug: tenant.slug, plan: plan.code },
+          details: { name: tenant.name, slug: tenant.slug, plan: plan.code, hostname },
         },
       });
 
@@ -175,7 +179,7 @@ export async function createTenantAction(data: {
     });
 
     revalidatePath('/superadmin');
-    return { success: true, tenant: result };
+    return { success: true, tenant: result, hostname };
   } catch (error: any) {
     console.error('Error creando tenant:', error);
     return { success: false, error: 'Ocurrió un error al crear la concesionaria.' };
@@ -207,6 +211,10 @@ export async function updateTenantStatusAction(tenantId: string, status: 'ACTIVE
 export async function addTenantDomainAction(tenantId: string, hostname: string, isCustom = false) {
   const superAdmin = await requireSuperAdmin();
   const cleanHost = hostname.trim().toLowerCase().replace(/\.$/, '');
+
+  if (cleanHost === getPlatformHost()) {
+    return { success: false, error: 'El dominio de plataforma está reservado y no puede asignarse a un tenant.' };
+  }
 
   try {
     const domain = await prisma.tenantDomain.create({
