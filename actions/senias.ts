@@ -35,13 +35,14 @@ export async function guardarSenia(data: {
       const senia = await tx.senia.create({ data: { tenantId: tenant.id, locationId: data.locationId || vehiculo.locationId || tenant.primaryLocationId || null, id_vehiculo: data.id_vehiculo, id_cliente: data.id_cliente, prospectoId: data.prospectoId || null, cotizacionId: data.cotizacionId || null, monto_ars: ars, monto_usd: usd, cotizacion: rate, fecha_senia: fecha, fecha_limite: limite, estado: 'ACTIVA' } });
       const reciboNro = `RES-${new Date().getFullYear()}-${String(senia.id_senia).padStart(6, '0')}`;
       await tx.senia.update({ where: { id_senia: senia.id_senia }, data: { recibo_nro: reciboNro } });
-      await tx.vehiculo.update({ where: { id_vehiculo: data.id_vehiculo }, data: { estado: 'SENADO' } });
+
+      // La reserva es un estado comercial independiente. No modifica el estado operativo del inventario.
       if (data.prospectoId) await tx.prospecto.updateMany({ where: { id_prospecto: data.prospectoId, tenantId: tenant.id }, data: { estado: 'RESERVADO', id_cliente: data.id_cliente } });
       if (data.cotizacionId) await tx.cotizacion.updateMany({ where: { id_cotizacion: data.cotizacionId, tenantId: tenant.id }, data: { estado: 'ACEPTADA', id_cliente: data.id_cliente } });
       return reciboNro;
     });
 
-    revalidatePath(`/vehiculos/${data.id_vehiculo}`); revalidatePath('/vehiculos'); revalidatePath('/motos'); revalidatePath('/prospectos');
+    revalidatePath(`/vehiculos/${data.id_vehiculo}`); revalidatePath('/vehiculos'); revalidatePath('/motos'); revalidatePath('/prospectos'); revalidatePath('/ventas/nueva');
     if (data.prospectoId) revalidatePath(`/prospectos/${data.prospectoId}`);
     return { success: true, recibo_nro: result };
   } catch (error) { console.error('Error guardando seña:', error); return { success: false, error: 'Ocurrió un error al guardar la seña.' }; }
@@ -57,13 +58,13 @@ export async function cancelarSenia(id_senia: number, id_vehiculo: number) {
 
     await db.$transaction(async (tx) => {
       await tx.senia.update({ where: { id_senia: senia.id_senia }, data: { estado: 'CANCELADA' } });
-      const restantes = await tx.senia.count({ where: { id_vehiculo, tenantId: tenant.id, estado: 'ACTIVA' } });
-      if (!restantes) await tx.vehiculo.update({ where: { id_vehiculo }, data: { estado: 'LISTO_PARA_VENTA' } });
+
+      // Cancelar una reserva tampoco altera el estado operativo de la unidad.
       if (senia.cotizacionId) await tx.cotizacion.updateMany({ where: { id_cotizacion: senia.cotizacionId, tenantId: tenant.id }, data: { estado: 'ENVIADA' } });
       if (senia.prospectoId) await tx.prospecto.updateMany({ where: { id_prospecto: senia.prospectoId, tenantId: tenant.id }, data: { estado: senia.cotizacionId ? 'COTIZADO' : 'NEGOCIACION' } });
     });
 
-    revalidatePath(`/vehiculos/${id_vehiculo}`); revalidatePath('/vehiculos'); revalidatePath('/motos'); revalidatePath('/prospectos');
+    revalidatePath(`/vehiculos/${id_vehiculo}`); revalidatePath('/vehiculos'); revalidatePath('/motos'); revalidatePath('/prospectos'); revalidatePath('/ventas/nueva');
     if (senia.prospectoId) revalidatePath(`/prospectos/${senia.prospectoId}`);
     return { success: true };
   } catch (error) { console.error('Error cancelando seña:', error); return { success: false, error: 'Ocurrió un error al cancelar la seña.' }; }
