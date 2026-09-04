@@ -7,6 +7,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function ProspectosPage() {
   const tenant = await getTenantContext();
+  const dolarActual = Number(tenant.settings?.dolarActual || 1400);
+
   const [prospectos, vehiculos] = await Promise.all([
     obtenerProspectos(),
     db.vehiculo.findMany({
@@ -18,10 +20,12 @@ export default async function ProspectosPage() {
         id_vehiculo: true,
         marca: true,
         modelo: true,
+        version: true,
         anio: true,
         patente: true,
         estado: true,
         precio_venta_usd: true,
+        precio_venta_ars: true,
       },
       orderBy: [{ marca: 'asc' }, { modelo: 'asc' }],
     }),
@@ -33,11 +37,15 @@ export default async function ProspectosPage() {
         <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">Comercial</p>
         <h1 className="text-3xl font-black text-slate-900 tracking-tight mt-1">Pipeline de operaciones</h1>
         <p className="text-sm text-slate-500 mt-1">
-          Lead → contacto → cotización → reserva → venta → entrega, todo trazado en una única operación.
+          Lead → contacto → cotización → reserva → venta → entrega, con importes visibles en pesos y dólares.
         </p>
       </div>
 
-      <ProspectosClient initialProspectos={prospectos as any[]} vehiculos={vehiculos as any[]} />
+      <ProspectosClient
+        initialProspectos={prospectos as any[]}
+        vehiculos={vehiculos as any[]}
+        dolarActual={dolarActual}
+      />
     </div>
   );
 }
