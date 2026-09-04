@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowRight, Calculator, CircleDollarSign, Loader2, Shuffle, TrendingUp } from 'lucide-react';
+import { AlertTriangle, ArrowRight, BookmarkCheck, Calculator, CircleDollarSign, Loader2, Shuffle, TrendingUp } from 'lucide-react';
 import { registrarVenta } from '@/actions/ventas';
 import DualMoney from '@/components/common/DualMoney';
 import DualCurrencyInput from '@/components/common/DualCurrencyInput';
@@ -13,6 +13,8 @@ type Props = {
   vehiculos: any[];
   clientes: any[];
   dolarActual: number;
+  tnaFinanciacion: number;
+  reservasActivas: any[];
   initialProspectoId?: number | null;
   initialQuote?: any | null;
 };
@@ -21,7 +23,15 @@ function asInput(value: number | null | undefined) {
   return value && Number.isFinite(Number(value)) ? String(Number(value).toFixed(2)) : '';
 }
 
-export default function CotizadorClient({ vehiculos, clientes, dolarActual, initialProspectoId, initialQuote }: Props) {
+export default function CotizadorClient({
+  vehiculos,
+  clientes,
+  dolarActual,
+  tnaFinanciacion,
+  reservasActivas,
+  initialProspectoId,
+  initialQuote,
+}: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const rate = Number(initialQuote?.cotizacion_dolar || dolarActual || 0);
@@ -35,6 +45,16 @@ export default function CotizadorClient({ vehiculos, clientes, dolarActual, init
   const selectedVehicle = useMemo(() => vehiculos.find((v) => String(v.id_vehiculo) === vehiculoId) || null, [vehiculos, vehiculoId]);
   const selectedClient = useMemo(() => clientes.find((c) => String(c.id_cliente) === clienteId) || null, [clientes, clienteId]);
 
+  const vehicleReservation = useMemo(
+    () => reservasActivas.find((s) => String(s.id_vehiculo) === vehiculoId) || null,
+    [reservasActivas, vehiculoId]
+  );
+  const activeReservation = useMemo(
+    () => vehicleReservation && String(vehicleReservation.id_cliente) === clienteId ? vehicleReservation : null,
+    [vehicleReservation, clienteId]
+  );
+  const reservationMismatch = Boolean(vehicleReservation && clienteId && String(vehicleReservation.id_cliente) !== clienteId);
+
   const initialPriceUsd = Number(initialQuote?.precio_final_usd || 0);
   const initialPriceArs = initialPriceUsd > 0 ? initialPriceUsd * rate : Number(selectedVehicle?.precio_venta_ars || 0);
   const initialAdvanceUsd = Number(initialQuote?.anticipo_usd || 0);
@@ -45,12 +65,12 @@ export default function CotizadorClient({ vehiculos, clientes, dolarActual, init
   const [anticipo, setAnticipo] = useState({ ars: asInput(initialAdvanceUsd * rate), usd: asInput(initialAdvanceUsd) });
   const [cantidadCuotas, setCantidadCuotas] = useState(String(initialQuote?.cantidad_cuotas || 12));
   const [recargoPct, setRecargoPct] = useState(() => {
-    if (!initialQuote || initialQuote.forma_pago !== 'Cuotas') return '36';
+    if (!initialQuote || initialQuote.forma_pago !== 'Cuotas') return String(Number(tnaFinanciacion || 0));
     const count = Number(initialQuote.cantidad_cuotas || 0);
     const installment = Number(initialQuote.valor_cuota_usd || 0);
     const capital = Number(initialQuote.saldo_financiado_usd || 0);
     if (count > 0 && installment > 0 && capital > 0) return String(Math.max(0, ((installment * count / capital) - 1) * 100).toFixed(2));
-    return '0';
+    return String(Number(tnaFinanciacion || 0));
   });
   const [fechaPrimerCuota, setFechaPrimerCuota] = useState(() => {
     const d = new Date();
@@ -62,6 +82,7 @@ export default function CotizadorClient({ vehiculos, clientes, dolarActual, init
   const [tienePermuta, setTienePermuta] = useState(Boolean(initialQuote?.tiene_permuta));
   const [valorPermuta, setValorPermuta] = useState({ ars: asInput(initialTradeUsd * rate), usd: asInput(initialTradeUsd) });
   const [permuta, setPermuta] = useState({ marca: '', modelo: '', version: '', anio: '', km: '', patente: '', color: '', motor: '' });
+  const autoAppliedReservation = useRef<number | null>(null);
 
   useEffect(() => {
     if (!selectedVehicle || initialQuote) return;
@@ -70,12 +91,37 @@ export default function CotizadorClient({ vehiculos, clientes, dolarActual, init
     setPrecio({ ars: asInput(ars), usd: asInput(usd) });
   }, [selectedVehicle, initialQuote, rate]);
 
-  const vehicleOptions = useMemo(() => vehiculos.map((v) => ({
-    value: String(v.id_vehiculo),
-    label: v.nombre,
-    description: `${v.patente || 'S/P'} · ${v.estado} · $ ${Number(v.precio_venta_ars || 0).toLocaleString('es-AR')} ARS · U$S ${Number(v.precio_venta_usd || 0).toLocaleString('es-AR')}`,
-    searchText: `${v.nombre} ${v.patente || ''} ${v.marca || ''} ${v.modelo || ''} ${v.anio || ''}`,
-  })), [vehiculos]);
+  // Una seña activa del mismo cliente se toma automáticamente como parte del anticipo.
+  useEffect(() => {
+    if (activeReservation && autoAppliedReservation.current !== activeReservation.id_senia) {
+      const reservationUsd = Number(activeReservation.monto_usd || 0);
+      const reservationArs = Number(activeReservation.monto_ars || 0);
+      const currentUsd = Number(anticipo.usd || 0);
+      const targetUsd = Math.max(currentUsd, reservationUsd);
+      const targetArs = targetUsd === reservationUsd
+        ? reservationArs
+        : targetUsd * rate;
+      setAnticipo({ ars: asInput(targetArs), usd: asInput(targetUsd) });
+      autoAppliedReservation.current = activeReservation.id_senia;
+      return;
+    }
+
+    if (!activeReservation && autoAppliedReservation.current !== null) {
+      const baseUsd = Number(initialQuote?.anticipo_usd || 0);
+      setAnticipo({ ars: asInput(baseUsd * rate), usd: asInput(baseUsd) });
+      autoAppliedReservation.current = null;
+    }
+  }, [activeReservation, initialQuote, rate]);
+
+  const vehicleOptions = useMemo(() => vehiculos.map((v) => {
+    const reservation = reservasActivas.find((s) => s.id_vehiculo === v.id_vehiculo);
+    return {
+      value: String(v.id_vehiculo),
+      label: v.nombre,
+      description: `${v.patente || 'S/P'} · ${String(v.estado).replace(/_/g, ' ')}${reservation ? ` · RESERVADO: ${reservation.cliente_nombre}` : ''} · $ ${Number(v.precio_venta_ars || 0).toLocaleString('es-AR')} ARS · U$S ${Number(v.precio_venta_usd || 0).toLocaleString('es-AR')}`,
+      searchText: `${v.nombre} ${v.patente || ''} ${v.marca || ''} ${v.modelo || ''} ${v.anio || ''} ${reservation?.cliente_nombre || ''}`,
+    };
+  }), [vehiculos, reservasActivas]);
 
   const clientOptions = useMemo(() => clientes.map((c) => ({
     value: String(c.id_cliente),
@@ -101,6 +147,12 @@ export default function CotizadorClient({ vehiculos, clientes, dolarActual, init
   const costUsd = Number(selectedVehicle?.precio_costo_usd || 0) || (rate > 0 ? costArs / rate : 0);
   const grossMarginArs = finalArs - costArs - tradeArs;
   const financeIncomeArs = financedArs - capitalArs;
+  const reservationArs = Number(activeReservation?.monto_ars || 0);
+  const reservationUsd = Number(activeReservation?.monto_usd || 0);
+  const cashDueAtClosingArs = formaPago === 'Contado'
+    ? Math.max(0, finalArs - reservationArs)
+    : Math.max(0, advanceArs - reservationArs);
+  const cashDueAtClosingUsd = rate > 0 ? cashDueAtClosingArs / rate : 0;
 
   const buildInstallments = () => {
     if (formaPago !== 'Cuotas') return undefined;
@@ -113,6 +165,7 @@ export default function CotizadorClient({ vehiculos, clientes, dolarActual, init
 
   const procesar = async () => {
     if (!selectedVehicle || !selectedClient || finalArs <= 0 || finalUsd <= 0) return alert('Seleccioná vehículo, cliente y definí el precio final.');
+    if (reservationMismatch) return alert(`La unidad tiene una reserva activa a nombre de ${vehicleReservation.cliente_nombre}. Cancelá esa reserva o seleccioná al cliente correcto antes de vender.`);
     if (formaPago === 'Cuotas' && advanceArs + tradeArs >= finalArs) return alert('Anticipo + permuta deben ser menores al precio final para financiar saldo.');
     if (tienePermuta && (!permuta.marca.trim() || !permuta.modelo.trim() || Number(permuta.anio) <= 0 || Number(permuta.km) < 0 || tradeUsd <= 0)) return alert('Completá marca, modelo, año, kilometraje y valor de toma de la permuta.');
 
@@ -125,8 +178,8 @@ export default function CotizadorClient({ vehiculos, clientes, dolarActual, init
       forma_pago: formaPago,
       anticipo_usd: Number(advanceUsd.toFixed(2)),
       saldo_financiado_usd: formaPago === 'Cuotas' ? Number(capitalUsd.toFixed(2)) : 0,
-      prospectoId: initialProspectoId || undefined,
-      cotizacionId: initialQuote?.id_cotizacion || undefined,
+      prospectoId: initialProspectoId || activeReservation?.prospectoId || undefined,
+      cotizacionId: initialQuote?.id_cotizacion || activeReservation?.cotizacionId || undefined,
       observaciones: observaciones || undefined,
       cuotas: buildInstallments(),
       permuta: tienePermuta ? {
@@ -163,6 +216,11 @@ export default function CotizadorClient({ vehiculos, clientes, dolarActual, init
               <SearchCombobox label="Vehículo" required value={vehiculoId} onChange={setVehiculoId} options={vehicleOptions} placeholder="Buscar por modelo, patente o año..." />
               <div><SearchCombobox label="Cliente" required value={clienteId} onChange={setClienteId} options={clientOptions} placeholder="Buscar por nombre, DNI, CUIT o teléfono..." /><div className="mt-1 text-right"><Link href="/clientes" className="text-xs font-bold text-blue-700 hover:underline">Crear nuevo cliente</Link></div></div>
             </div>
+
+            {vehicleReservation && !clienteId && <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 flex items-start gap-3"><BookmarkCheck className="w-5 h-5 text-amber-600 shrink-0" /><div><p className="font-black text-amber-950">Unidad con reserva activa</p><p className="text-xs text-amber-800 mt-1">{vehicleReservation.cliente_nombre} · {vehicleReservation.recibo_nro || `Reserva #${vehicleReservation.id_senia}`}</p></div></div>}
+            {reservationMismatch && <div className="rounded-xl bg-red-50 border border-red-200 p-4 flex items-start gap-3"><AlertTriangle className="w-5 h-5 text-red-600 shrink-0" /><div><p className="font-black text-red-950">El cliente seleccionado no es el titular de la reserva</p><p className="text-xs text-red-700 mt-1">La unidad está reservada por {vehicleReservation.cliente_nombre}. No se podrá confirmar la venta a otro cliente mientras esa reserva siga activa.</p></div></div>}
+            {activeReservation && <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div className="flex items-start gap-3"><BookmarkCheck className="w-5 h-5 text-emerald-600 shrink-0" /><div><p className="font-black text-emerald-950">Seña detectada y aplicada</p><p className="text-xs text-emerald-700 mt-1">{activeReservation.recibo_nro || `Reserva #${activeReservation.id_senia}`} · {activeReservation.cliente_nombre}</p></div></div><DualMoney ars={reservationArs} usd={reservationUsd} rate={activeReservation.cotizacion || rate} compact primaryClassName="font-black text-emerald-900" /></div>}
+
             {selectedVehicle && <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 border border-slate-200 rounded-xl p-4"><div><p className="text-[10px] uppercase font-black text-slate-400">Precio publicado</p><DualMoney ars={selectedVehicle.precio_venta_ars} usd={selectedVehicle.precio_venta_usd} rate={rate} /></div><div><p className="text-[10px] uppercase font-black text-slate-400">Costo registrado</p><DualMoney ars={costArs} usd={costUsd} rate={rate} /></div></div>}
           </section>
 
@@ -171,13 +229,15 @@ export default function CotizadorClient({ vehiculos, clientes, dolarActual, init
             <DualCurrencyInput label="Precio final pactado" required ars={precio.ars} usd={precio.usd} rate={rate} onChange={setPrecio} helper={initialQuote ? `Precio cargado desde la cotización #${initialQuote.id_cotizacion}. Podés ajustarlo antes de confirmar.` : undefined} />
             <div><span className="text-xs font-black text-slate-600 uppercase tracking-wider">Forma de pago *</span><div className="grid grid-cols-2 gap-2 bg-slate-100 rounded-xl p-1.5 mt-1.5"><button type="button" onClick={() => setFormaPago('Contado')} className={`py-2.5 rounded-lg text-sm font-black ${formaPago === 'Contado' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Contado</button><button type="button" onClick={() => setFormaPago('Cuotas')} className={`py-2.5 rounded-lg text-sm font-black ${formaPago === 'Cuotas' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500'}`}>Financiado</button></div></div>
 
+            {activeReservation && <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3"><p className="text-[10px] uppercase font-black text-emerald-700">Ya abonado como seña</p><DualMoney ars={reservationArs} usd={reservationUsd} rate={activeReservation.cotizacion || rate} compact /><p className="text-[11px] text-emerald-700 mt-1">Se descuenta automáticamente del efectivo a cobrar al cierre.</p></div>}
+
             {formaPago === 'Cuotas' && (
               <div className="rounded-2xl bg-indigo-50/50 border border-indigo-200 p-4 space-y-4">
                 <h3 className="font-black text-indigo-950 flex items-center gap-2"><TrendingUp className="w-4 h-4" /> Condiciones de financiación</h3>
-                <DualCurrencyInput label="Anticipo" ars={anticipo.ars} usd={anticipo.usd} rate={rate} onChange={setAnticipo} />
+                <DualCurrencyInput label="Anticipo total" ars={anticipo.ars} usd={anticipo.usd} rate={rate} onChange={setAnticipo} helper={activeReservation ? 'Incluye la seña ya cobrada. Podés aumentar el anticipo total.' : undefined} />
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <label><span className="text-xs font-black text-slate-600 uppercase tracking-wider">Cantidad de cuotas *</span><input type="number" min="1" value={cantidadCuotas} onChange={(e) => setCantidadCuotas(e.target.value)} className="mt-1.5 w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm" /></label>
-                  <label><span className="text-xs font-black text-slate-600 uppercase tracking-wider">Recargo total (%)</span><input type="number" min="0" step="any" value={recargoPct} onChange={(e) => setRecargoPct(e.target.value)} className="mt-1.5 w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm" /></label>
+                  <label><span className="text-xs font-black text-slate-600 uppercase tracking-wider">Tasa / recargo (%)</span><input type="number" min="0" step="any" value={recargoPct} onChange={(e) => setRecargoPct(e.target.value)} className="mt-1.5 w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm" /><span className="text-[10px] text-slate-400 mt-1 block">Configurado: {Number(tnaFinanciacion || 0).toLocaleString('es-AR')}%</span></label>
                   <label><span className="text-xs font-black text-slate-600 uppercase tracking-wider">Vencimiento 1ª cuota *</span><input type="date" value={fechaPrimerCuota} onChange={(e) => setFechaPrimerCuota(e.target.value)} className="mt-1.5 w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm" /></label>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3"><div className="rounded-xl bg-white border border-indigo-100 p-3"><p className="text-[10px] uppercase font-black text-slate-400">Saldo financiado</p><DualMoney ars={capitalArs} usd={capitalUsd} rate={rate} compact /></div><div className="rounded-xl bg-white border border-indigo-100 p-3"><p className="text-[10px] uppercase font-black text-slate-400">Valor por cuota</p><DualMoney ars={installmentArs} usd={installmentUsd} rate={rate} compact /></div><div className="rounded-xl bg-white border border-indigo-100 p-3"><p className="text-[10px] uppercase font-black text-slate-400">Interés total</p><DualMoney ars={financeIncomeArs} rate={rate} compact /></div></div>
@@ -197,10 +257,12 @@ export default function CotizadorClient({ vehiculos, clientes, dolarActual, init
           <div className="bg-slate-950 text-white rounded-2xl p-5 shadow-xl sticky top-24 space-y-4">
             <div><p className="text-[10px] uppercase tracking-wider font-black text-slate-500">Resumen de operación</p><p className="text-sm font-bold text-slate-300 mt-1">TC aplicado: $ {rate.toLocaleString('es-AR')} / USD</p></div>
             <div className="rounded-xl bg-white/5 border border-white/10 p-4"><p className="text-[10px] uppercase font-black text-slate-500">Precio final</p><DualMoney ars={finalArs} usd={finalUsd} rate={rate} primaryClassName="text-2xl font-black text-white" secondaryClassName="text-sm font-bold text-slate-400" /></div>
+            {activeReservation && <div className="rounded-xl bg-emerald-500/10 border border-emerald-400/20 p-4"><p className="text-[10px] uppercase font-black text-emerald-400">Seña ya cobrada</p><DualMoney ars={reservationArs} usd={reservationUsd} rate={activeReservation.cotizacion || rate} primaryClassName="font-black text-emerald-200" secondaryClassName="text-xs text-emerald-400" /></div>}
             {tienePermuta && <div className="rounded-xl bg-amber-500/10 border border-amber-400/20 p-4"><p className="text-[10px] uppercase font-black text-amber-400">Valor de toma</p><DualMoney ars={tradeArs} usd={tradeUsd} rate={rate} primaryClassName="font-black text-amber-100" secondaryClassName="text-xs text-amber-300" /></div>}
             {formaPago === 'Cuotas' && <div className="rounded-xl bg-indigo-500/10 border border-indigo-400/20 p-4 space-y-3"><div><p className="text-[10px] uppercase font-black text-indigo-400">Capital financiado</p><DualMoney ars={capitalArs} usd={capitalUsd} rate={rate} primaryClassName="font-black text-white" secondaryClassName="text-xs text-indigo-300" /></div><div><p className="text-[10px] uppercase font-black text-indigo-400">Plan</p><p className="text-xl font-black">{count} × $ {installmentArs.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</p><p className="text-xs text-indigo-300">U$S {installmentUsd.toLocaleString('es-AR', { maximumFractionDigits: 2 })} por cuota</p></div></div>}
+            {activeReservation && <div className="rounded-xl bg-white/5 border border-white/10 p-4"><p className="text-[10px] uppercase font-black text-slate-500">Efectivo adicional al cierre</p><DualMoney ars={cashDueAtClosingArs} usd={cashDueAtClosingUsd} rate={rate} primaryClassName="font-black text-white" secondaryClassName="text-xs text-slate-400" /></div>}
             <div className="rounded-xl bg-emerald-500/10 border border-emerald-400/20 p-4"><p className="text-[10px] uppercase font-black text-emerald-400">Margen comercial estimado</p><DualMoney ars={grossMarginArs} rate={rate} primaryClassName={`text-xl font-black ${grossMarginArs >= 0 ? 'text-emerald-300' : 'text-red-300'}`} secondaryClassName="text-xs text-slate-400" /></div>
-            <button onClick={procesar} disabled={submitting || !selectedVehicle || !selectedClient || finalArs <= 0} className="w-full py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black flex items-center justify-center gap-2 disabled:opacity-50">{submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CircleDollarSign className="w-5 h-5" />} Confirmar venta <ArrowRight className="w-4 h-4" /></button>
+            <button onClick={procesar} disabled={submitting || !selectedVehicle || !selectedClient || finalArs <= 0 || reservationMismatch} className="w-full py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black flex items-center justify-center gap-2 disabled:opacity-50">{submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CircleDollarSign className="w-5 h-5" />} Confirmar venta <ArrowRight className="w-4 h-4" /></button>
           </div>
         </aside>
       </div>
