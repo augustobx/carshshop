@@ -2,8 +2,9 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, DollarSign, Image as ImageIcon, Loader2, Palette, Save, Settings, WalletCards } from 'lucide-react';
-import { guardarConfiguracion } from '@/actions/config';
+import { Building2, DollarSign, Eye, EyeOff, Image as ImageIcon, Loader2, Palette, Save, Smartphone } from 'lucide-react';
+import { guardarConfiguracion, guardarPwaVendedorConfig } from '@/actions/config';
+import { SellerPwaConfig } from '@/lib/seller-pwa-config';
 import { useConfigStore } from '@/store/useConfigStore';
 
 export default function ConfiguracionClient({ initial }: { initial: any }) {
@@ -29,6 +30,7 @@ export default function ConfiguracionClient({ initial }: { initial: any }) {
     direccion: initial.direccion || '',
     pieImpresion: initial.pieImpresion || '',
   });
+  const [sellerPwa, setSellerPwa] = useState<SellerPwaConfig>(initial.sellerPwa);
 
   const input = 'w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500';
   const label = 'block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1.5';
@@ -45,15 +47,22 @@ export default function ConfiguracionClient({ initial }: { initial: any }) {
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true); setError('');
-    const res = await guardarConfiguracion({
-      ...form,
-      dolarActual: Number(form.dolarActual),
-      tnaFinanciacion: Number(form.tnaFinanciacion),
-      comisionVentaDefecto: Number(form.comisionVentaDefecto),
-      logoUrl: form.logoUrl || null,
-    });
+
+    const [res, pwaRes] = await Promise.all([
+      guardarConfiguracion({
+        ...form,
+        dolarActual: Number(form.dolarActual),
+        tnaFinanciacion: Number(form.tnaFinanciacion),
+        comisionVentaDefecto: Number(form.comisionVentaDefecto),
+        logoUrl: form.logoUrl || null,
+      }),
+      guardarPwaVendedorConfig(sellerPwa),
+    ]);
+
     setSaving(false);
-    if (!res.success) return setError(res.error || 'No se pudo guardar.');
+    if (!res.success) return setError(res.error || 'No se pudo guardar la configuración.');
+    if (!pwaRes.success) return setError(pwaRes.error || 'No se pudo guardar la configuración de vendedores.');
+
     setDolar(Number(form.dolarActual));
     setTipoDolar(form.tipoDolar);
     setLogo(form.logoUrl || null);
@@ -61,9 +70,29 @@ export default function ConfiguracionClient({ initial }: { initial: any }) {
     router.refresh();
   };
 
+  const togglePwa = (key: keyof SellerPwaConfig) => {
+    setSellerPwa((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      if (!next.showArsPrices && !next.showUsdPrices) {
+        if (key === 'showArsPrices') next.showUsdPrices = true;
+        else next.showArsPrices = true;
+      }
+      return next;
+    });
+  };
+
+  const pwaOptions: { key: keyof SellerPwaConfig; title: string; detail: string }[] = [
+    { key: 'showArsPrices', title: 'Precios en pesos', detail: 'Muestra ARS como precio comercial visible.' },
+    { key: 'showUsdPrices', title: 'Precios en dólares', detail: 'Muestra USD junto al valor en pesos.' },
+    { key: 'showReservationOwner', title: 'Titular de la reserva', detail: 'Permite ver a nombre de quién está reservada una unidad.' },
+    { key: 'showCostAndMargin', title: 'Costo y margen', detail: 'Información sensible de rentabilidad. Apagado por defecto.' },
+    { key: 'showNotes', title: 'Bitácora interna', detail: 'Permite leer y agregar notas desde la ficha móvil.' },
+    { key: 'allowCloseSales', title: 'Cerrar ventas', detail: 'Permite confirmar una operación desde el cotizador móvil.' },
+  ];
+
   return (
     <form onSubmit={save} className="p-6 md:p-8 max-w-6xl mx-auto space-y-6 pb-28">
-      <div><p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">Gestión</p><h1 className="text-3xl font-black text-slate-900 mt-1">Configuración de concesionaria</h1><p className="text-sm text-slate-500 mt-1">Datos fiscales, moneda, financiación, contacto e identidad visual en un único lugar.</p></div>
+      <div><p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600">Gestión</p><h1 className="text-3xl font-black text-slate-900 mt-1">Configuración de concesionaria</h1><p className="text-sm text-slate-500 mt-1">Datos fiscales, moneda, financiación, vendedores e identidad visual en un único lugar.</p></div>
       {error && <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm font-bold text-red-700">{error}</div>}
 
       <section className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
@@ -81,7 +110,7 @@ export default function ConfiguracionClient({ initial }: { initial: any }) {
       </section>
 
       <section className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-        <header className="p-5 bg-emerald-50 border-b border-emerald-100 flex items-center gap-2"><DollarSign className="w-5 h-5 text-emerald-600" /><div><h2 className="font-black text-slate-900">Moneda y financiación</h2><p className="text-xs text-slate-500">ARS es moneda principal de visualización; USD queda como referencia contable.</p></div></header>
+        <header className="p-5 bg-emerald-50 border-b border-emerald-100 flex items-center gap-2"><DollarSign className="w-5 h-5 text-emerald-600" /><div><h2 className="font-black text-slate-900">Moneda y financiación</h2><p className="text-xs text-slate-500">ARS es moneda principal; USD queda como referencia comercial y contable.</p></div></header>
         <div className="p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div><label className={label}>Tipo de dólar</label><select className={input} value={form.tipoDolar} onChange={(e) => setForm({ ...form, tipoDolar: e.target.value })}><option value="blue">Blue</option><option value="oficial">Oficial</option><option value="mep">MEP</option></select></div>
           <div><label className={label}>Cotización ARS / USD</label><input type="number" min="1" step="0.01" className={input} value={form.dolarActual} onChange={(e) => setForm({ ...form, dolarActual: e.target.value })} /></div>
@@ -91,7 +120,20 @@ export default function ConfiguracionClient({ initial }: { initial: any }) {
       </section>
 
       <section className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-        <header className="p-5 bg-slate-50 border-b border-slate-200 flex items-center gap-2"><Palette className="w-5 h-5 text-violet-600" /><div><h2 className="font-black text-slate-900">Identidad visual</h2><p className="text-xs text-slate-500">Logo y colores aplicados al ERP del tenant.</p></div></header>
+        <header className="p-5 bg-blue-50 border-b border-blue-100 flex items-center gap-2"><Smartphone className="w-5 h-5 text-blue-600" /><div><h2 className="font-black text-slate-900">App de vendedores</h2><p className="text-xs text-slate-500">Elegí qué información comercial puede ver el vendedor en la PWA.</p></div></header>
+        <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-3">
+          {pwaOptions.map((option) => {
+            const enabled = sellerPwa[option.key];
+            return <button key={option.key} type="button" onClick={() => togglePwa(option.key)} className={`text-left rounded-2xl border p-4 flex items-start justify-between gap-4 transition-colors ${enabled ? 'border-blue-200 bg-blue-50/60' : 'border-slate-200 bg-slate-50'}`}>
+              <div><p className="font-black text-slate-900">{option.title}</p><p className="text-xs text-slate-500 mt-1 leading-relaxed">{option.detail}</p></div>
+              <span className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${enabled ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'}`}>{enabled ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}</span>
+            </button>;
+          })}
+        </div>
+      </section>
+
+      <section className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <header className="p-5 bg-slate-50 border-b border-slate-200 flex items-center gap-2"><Palette className="w-5 h-5 text-violet-600" /><div><h2 className="font-black text-slate-900">Identidad visual</h2><p className="text-xs text-slate-500">Logo y colores aplicados al ERP y la PWA del tenant.</p></div></header>
         <div className="p-5 grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div><label className={label}>Logo</label><button type="button" onClick={() => fileRef.current?.click()} className="w-full min-h-40 border-2 border-dashed border-slate-300 rounded-2xl flex items-center justify-center bg-slate-50 hover:border-blue-400 overflow-hidden">{form.logoUrl ? <img src={form.logoUrl} alt="Logo" className="max-h-32 max-w-[80%] object-contain" /> : <div className="text-center text-slate-400"><ImageIcon className="w-9 h-9 mx-auto mb-2" /><p className="text-sm font-bold">Seleccionar imagen</p><p className="text-xs">PNG/JPG, máximo 1 MB</p></div>}</button><input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => handleLogo(e.target.files?.[0])} />{form.logoUrl && <button type="button" onClick={() => setForm({ ...form, logoUrl: '' })} className="text-xs font-bold text-red-600 mt-2">Quitar logo</button>}</div>
           <div className="space-y-4"><div><label className={label}>Color principal</label><div className="flex gap-2"><input type="color" value={form.primaryColor} onChange={(e) => setForm({ ...form, primaryColor: e.target.value })} className="w-14 h-11 border rounded-xl p-1" /><input className={input} value={form.primaryColor} onChange={(e) => setForm({ ...form, primaryColor: e.target.value })} /></div></div><div><label className={label}>Color secundario</label><div className="flex gap-2"><input type="color" value={form.secondaryColor} onChange={(e) => setForm({ ...form, secondaryColor: e.target.value })} className="w-14 h-11 border rounded-xl p-1" /><input className={input} value={form.secondaryColor} onChange={(e) => setForm({ ...form, secondaryColor: e.target.value })} /></div></div><div className="rounded-2xl p-5 text-white" style={{ backgroundColor: form.primaryColor }}><p className="text-xs uppercase font-black opacity-70">Vista previa</p><p className="text-xl font-black mt-1">{form.appName || 'Concesionaria'}</p><p className="text-sm opacity-80 mt-1">OnlyCars Dealer Management System</p></div></div>
