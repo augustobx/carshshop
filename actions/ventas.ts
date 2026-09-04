@@ -43,14 +43,22 @@ export async function registrarVenta(data: {
     if (!['Contado', 'Cuotas'].includes(data.forma_pago)) return { success: false, error: 'Forma de pago inválida.' };
 
     const result = await db.$transaction(async (tx) => {
-      const [vehiculoVenta, clienteVenta] = await Promise.all([
+      const [vehiculoVenta, clienteVenta, reservaActiva] = await Promise.all([
         tx.vehiculo.findFirst({ where: { id_vehiculo: data.id_vehiculo, tenantId: tenant.id } }),
         tx.cliente.findFirst({ where: { id_cliente: data.id_cliente, tenantId: tenant.id } }),
+        tx.senia.findFirst({
+          where: { id_vehiculo: data.id_vehiculo, tenantId: tenant.id, estado: 'ACTIVA' },
+          include: { cliente: { select: { nombre_completo: true } } },
+          orderBy: { fecha_senia: 'desc' },
+        }),
       ]);
       if (!vehiculoVenta || !clienteVenta) throw new Error('Vehículo o cliente inválido para esta concesionaria.');
       if (vehiculoVenta.estado === 'VENDIDO') throw new Error('La unidad ya figura como vendida.');
+      if (reservaActiva && reservaActiva.id_cliente !== data.id_cliente) {
+        throw new Error(`La unidad tiene una reserva activa a nombre de ${reservaActiva.cliente.nombre_completo}.`);
+      }
 
-      let prospectoId = data.prospectoId || null;
+      let prospectoId = data.prospectoId || reservaActiva?.prospectoId || null;
       if (prospectoId) {
         const p = await tx.prospecto.findFirst({ where: { id_prospecto: prospectoId, tenantId: tenant.id } });
         if (!p) throw new Error('El prospecto indicado no pertenece a esta concesionaria.');
@@ -62,7 +70,7 @@ export async function registrarVenta(data: {
         prospectoId = p?.id_prospecto || null;
       }
 
-      let cotizacionId = data.cotizacionId || null;
+      let cotizacionId = data.cotizacionId || reservaActiva?.cotizacionId || null;
       if (cotizacionId) {
         const q = await tx.cotizacion.findFirst({ where: { id_cotizacion: cotizacionId, tenantId: tenant.id, id_vehiculo: data.id_vehiculo } });
         if (!q) throw new Error('La cotización indicada no es válida para esta unidad.');
@@ -94,8 +102,12 @@ export async function registrarVenta(data: {
         idVehiculoPermuta = permutado.id_vehiculo;
       }
 
-      const anticipo = data.forma_pago === 'Contado' ? precioUsd : Math.max(0, Number(data.anticipo_usd || 0));
-      const saldo = data.forma_pago === 'Cuotas' ? Math.max(0, Number(data.saldo_financiado_usd || 0)) : 0;
+      const reservaUsd = Number(reservaActiva?.monto_usd || 0);
+      const anticipoSolicitado = Math.max(0, Number(data.anticipo_usd || 0));
+      // Si ya hubo seña, el anticipo total de la venta nunca puede quedar por debajo del dinero ya recibido.
+      const anticipo = data.forma_pago === 'Contado' ? precioUsd : Math.max(anticipoSolicitado, reservaUsd);
+      const saldo = data.forma_pago === 'Cuotas' ? Math.max(0, precioUsd - anticipo - valorTomaPermuta) : 0;
+
       if (data.forma_pago === 'Cuotas' && anticipo + valorTomaPermuta >= precioUsd) throw new Error('Anticipo y permuta no pueden cubrir o superar el total si la operación se marca financiada.');
       if (data.forma_pago === 'Cuotas' && (!data.cuotas?.length || saldo <= 0)) throw new Error('La venta financiada requiere saldo y plan de cuotas.');
 
@@ -122,7 +134,9 @@ export async function registrarVenta(data: {
       }
 
       await tx.vehiculo.update({ where: { id_vehiculo: data.id_vehiculo }, data: { estado: 'VENDIDO' } });
-      await tx.senia.updateMany({ where: { id_vehiculo: data.id_vehiculo, tenantId: tenant.id, estado: 'ACTIVA' }, data: { estado: 'CANCELADA' } });
+      if (reservaActiva) {
+        await tx.senia.update({ where: { id_senia: reservaActiva.id_senia }, data: { estado: 'CANCELADA' } });
+      }
       if (cotizacionId) await tx.cotizacion.update({ where: { id_cotizacion: cotizacionId }, data: { estado: 'ACEPTADA', id_cliente: data.id_cliente } });
       if (prospectoId) await tx.prospecto.update({ where: { id_prospecto: prospectoId }, data: { estado: 'GANADO', id_cliente: data.id_cliente, id_vehiculo_interes: data.id_vehiculo, proxima_accion: null } });
       await tx.entrega.create({ data: { tenantId: tenant.id, id_venta: venta.id_venta, estado: 'PENDIENTE', checklist: { documentacion: false, unidad_revisada: false, llaves: false, combustible: false, cliente_notificado: false } } });
@@ -130,7 +144,7 @@ export async function registrarVenta(data: {
       return { id_venta: venta.id_venta, numeroBoleto, prospectoId };
     });
 
-    revalidatePath('/vehiculos'); revalidatePath('/motos'); revalidatePath(`/vehiculos/${data.id_vehiculo}`); revalidatePath('/ventas'); revalidatePath('/cuotas'); revalidatePath('/caja'); revalidatePath('/prospectos');
+    revalidatePath('/vehiculos'); revalidatePath('/motos'); revalidatePath(`/vehiculos/${data.id_vehiculo}`); revalidatePath('/ventas'); revalidatePath('/ventas/nueva'); revalidatePath('/cuotas'); revalidatePath('/caja'); revalidatePath('/prospectos');
     if (result.prospectoId) revalidatePath(`/prospectos/${result.prospectoId}`);
     return { success: true, id_venta: result.id_venta, numero_boleto: result.numeroBoleto };
   } catch (error: any) {
