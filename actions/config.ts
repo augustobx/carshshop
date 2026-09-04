@@ -10,6 +10,37 @@ const CONFIG_ROLES = [RolMembresia.OWNER, RolMembresia.MANAGER];
 const DOLAR_ROLES = [RolMembresia.OWNER, RolMembresia.MANAGER, RolMembresia.ADMINISTRATIVO];
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
+async function syncVehicleArsPrices(tx: any, tenantId: string, rate: number) {
+  if (!Number.isFinite(rate) || rate <= 0) return;
+
+  await tx.$executeRaw`
+    UPDATE Vehiculo
+       SET precio_venta_ars = ROUND(precio_venta_usd * ${rate}, 2)
+     WHERE tenantId = ${tenantId}
+       AND precio_venta_usd IS NOT NULL
+       AND precio_venta_usd > 0
+  `;
+
+  await tx.$executeRaw`
+    UPDATE Vehiculo
+       SET precio_compra_ars = ROUND(precio_compra_usd * ${rate}, 2)
+     WHERE tenantId = ${tenantId}
+       AND precio_compra_usd IS NOT NULL
+       AND precio_compra_usd > 0
+  `;
+}
+
+function revalidateFinancialViews() {
+  revalidatePath('/', 'layout');
+  revalidatePath('/vehiculos');
+  revalidatePath('/motos');
+  revalidatePath('/ventas');
+  revalidatePath('/ventas/nueva');
+  revalidatePath('/prospectos');
+  revalidatePath('/consignaciones');
+  revalidatePath('/documentos', 'layout');
+}
+
 export async function guardarConfiguracion(data: {
   appName?: string;
   dolarActual: number;
@@ -51,7 +82,7 @@ export async function guardarConfiguracion(data: {
         data: { name: appName, cuit, address: direccion, phone: telefono, email },
       });
 
-      return tx.tenantSettings.upsert({
+      const saved = await tx.tenantSettings.upsert({
         where: { tenantId: tenant.id },
         update: {
           appName,
@@ -89,11 +120,13 @@ export async function guardarConfiguracion(data: {
           pieImpresion: data.pieImpresion?.trim() || null,
         },
       });
+
+      await syncVehicleArsPrices(tx, tenant.id, dolar);
+      return saved;
     });
 
-    revalidatePath('/', 'layout');
+    revalidateFinancialViews();
     revalidatePath('/configuracion');
-    revalidatePath('/documentos', 'layout');
     return { success: true, settings };
   } catch (error: any) {
     console.error('Error guardando configuración:', error);
@@ -106,8 +139,12 @@ export async function updateConfig(clave: string, valor: string) {
     const tenant = await getTenantContext();
     await requireTenantRole(tenant.id, CONFIG_ROLES);
     const dataToUpdate: Record<string, unknown> = {};
-    if (clave === 'dolar_actual') dataToUpdate.dolarActual = parseFloat(valor) || 1400;
-    else if (clave === 'tipo_dolar' && ['blue', 'oficial', 'mep'].includes(valor)) dataToUpdate.tipoDolar = valor;
+    let newRate: number | null = null;
+
+    if (clave === 'dolar_actual') {
+      newRate = parseFloat(valor) || 1400;
+      dataToUpdate.dolarActual = newRate;
+    } else if (clave === 'tipo_dolar' && ['blue', 'oficial', 'mep'].includes(valor)) dataToUpdate.tipoDolar = valor;
     else if (clave === 'empresa_logo') dataToUpdate.logoUrl = valor || null;
     else if (clave === 'tna') dataToUpdate.tnaFinanciacion = Math.max(0, parseFloat(valor) || 0);
     else if (clave === 'empresa_tema') {
@@ -116,8 +153,12 @@ export async function updateConfig(clave: string, valor: string) {
       if (parsed.secondary && HEX_RE.test(parsed.secondary)) dataToUpdate.secondaryColor = parsed.secondary;
     } else return { success: false, error: 'Configuración no permitida.' };
 
-    await db.tenantSettings.upsert({ where: { tenantId: tenant.id }, update: dataToUpdate, create: { tenantId: tenant.id, appName: tenant.name, ...dataToUpdate } });
-    revalidatePath('/', 'layout');
+    await db.$transaction(async (tx) => {
+      await tx.tenantSettings.upsert({ where: { tenantId: tenant.id }, update: dataToUpdate, create: { tenantId: tenant.id, appName: tenant.name, ...dataToUpdate } });
+      if (newRate) await syncVehicleArsPrices(tx, tenant.id, newRate);
+    });
+
+    revalidateFinancialViews();
     return { success: true };
   } catch (error) {
     console.error('Error guardando configuración legacy:', error);
@@ -137,13 +178,16 @@ export async function syncDolarApi(tipo: string = 'blue') {
     const valorVenta = Number(data.venta);
     if (!Number.isFinite(valorVenta) || valorVenta <= 0) return { success: false, error: 'Cotización no encontrada.' };
 
-    await db.tenantSettings.upsert({
-      where: { tenantId: tenant.id },
-      update: { dolarActual: valorVenta, tipoDolar: tipo },
-      create: { tenantId: tenant.id, appName: tenant.name, dolarActual: valorVenta, tipoDolar: tipo },
+    await db.$transaction(async (tx) => {
+      await tx.tenantSettings.upsert({
+        where: { tenantId: tenant.id },
+        update: { dolarActual: valorVenta, tipoDolar: tipo },
+        create: { tenantId: tenant.id, appName: tenant.name, dolarActual: valorVenta, tipoDolar: tipo },
+      });
+      await syncVehicleArsPrices(tx, tenant.id, valorVenta);
     });
 
-    revalidatePath('/', 'layout');
+    revalidateFinancialViews();
     return { success: true, valor: valorVenta };
   } catch (error) {
     console.error('Error sincronizando dólar:', error);
