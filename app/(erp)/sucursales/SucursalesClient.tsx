@@ -1,192 +1,32 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { crearSucursal } from '@/actions/sucursales';
-import { Building, Plus, Car, DollarSign, MapPin, Phone, CheckCircle2, Loader2 } from 'lucide-react';
+import { Building, Plus, MapPin, Phone, Loader2, Search, X, Warehouse, BadgeDollarSign } from 'lucide-react';
 
-export default function SucursalesClient({
-  initialSucursales,
-}: {
-  initialSucursales: any[];
-}) {
-  const [sucursales, setSucursales] = useState(initialSucursales);
+export default function SucursalesClient({ initialSucursales, maxLocations }: { initialSucursales: any[]; maxLocations: number }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const [form, setForm] = useState({
-    name: '',
-    code: '',
-    address: '',
-    phone: '',
-    isMain: false,
-  });
+  const [search, setSearch] = useState('');
+  const [form, setForm] = useState({ name: '', code: '', address: '', phone: '', isMain: false });
+  const filtered = useMemo(() => { const q = search.trim().toLowerCase(); return initialSucursales.filter((s) => !q || `${s.name} ${s.code} ${s.address || ''} ${s.phone || ''}`.toLowerCase().includes(q)); }, [initialSucursales, search]);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-
-    const res = await crearSucursal(form);
-    if (res.success && res.sucursal) {
-      setIsModalOpen(false);
-      window.location.reload();
-    } else {
-      alert(res.error || 'Error creando sucursal.');
-    }
-    setIsSubmitting(false);
+    e.preventDefault(); setIsSubmitting(true);
+    const res = await crearSucursal(form); setIsSubmitting(false);
+    if (!res.success) return alert(res.error || 'Error creando sucursal.');
+    setIsModalOpen(false); window.location.reload();
   };
+  const input = 'w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500';
+  const label = 'block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1.5';
 
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-end">
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2.5 rounded-xl text-sm flex items-center gap-2 shadow-sm transition-all"
-        >
-          <Plus className="w-4 h-4" />
-          Nueva Sucursal / Salón
-        </button>
-      </div>
+  return <div className="space-y-5">
+    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white border rounded-2xl p-4 shadow-sm"><div className="relative flex-1 max-w-md"><Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar sucursal, código o dirección..." className="w-full pl-9 pr-3 py-2.5 border border-slate-300 rounded-xl text-sm" /></div><div className="flex items-center gap-3"><span className="text-xs font-bold text-slate-500">{initialSucursales.length} / {maxLocations} activas</span><button onClick={() => setIsModalOpen(true)} disabled={initialSucursales.length >= maxLocations} className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2.5 rounded-xl text-sm flex items-center gap-2 disabled:opacity-50"><Plus className="w-4 h-4" /> Nueva sucursal</button></div></div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {sucursales.map((s) => (
-          <div
-            key={s.id}
-            className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4 shadow-xs hover:shadow-md transition-shadow relative overflow-hidden"
-          >
-            {s.isMain && (
-              <span className="absolute top-4 right-4 bg-blue-100 text-blue-700 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border border-blue-200">
-                Sede Central
-              </span>
-            )}
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">{filtered.map((s) => <div key={s.id} className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-sm relative overflow-hidden">{s.isMain && <span className="absolute top-4 right-4 bg-blue-100 text-blue-700 text-[10px] font-black uppercase px-2.5 py-1 rounded-full border border-blue-200">Sede central</span>}<div className="flex items-center gap-3"><div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><Building className="w-5 h-5" /></div><div><h3 className="font-black text-slate-900 text-lg">{s.name}</h3><p className="text-xs text-slate-400 font-mono">{s.code}</p></div></div><div className="space-y-2 text-sm text-slate-600 border-t pt-3">{s.address ? <p className="flex gap-2"><MapPin className="w-4 h-4 text-slate-400 shrink-0" />{s.address}</p> : <p className="text-slate-400">Sin dirección registrada</p>}{s.phone && <p className="flex gap-2"><Phone className="w-4 h-4 text-slate-400" />{s.phone}</p>}</div><div className="grid grid-cols-2 gap-2 pt-2 border-t"><Metric icon={Warehouse} label="Stock" value={s._count?.vehiculos || 0} /><Metric icon={BadgeDollarSign} label="Ventas" value={s._count?.ventas || 0} /></div></div>)}{filtered.length === 0 && <div className="col-span-full border border-dashed rounded-2xl p-10 text-center text-slate-500">No se encontraron sucursales.</div>}</div>
 
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
-                <Building className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-lg">{s.name}</h3>
-                <p className="text-xs text-slate-400 font-mono">código: {s.code}</p>
-              </div>
-            </div>
-
-            <div className="space-y-1.5 text-xs text-slate-600 border-t border-slate-100 pt-3">
-              {s.address && (
-                <p className="flex items-center gap-2">
-                  <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span>{s.address}</span>
-                </p>
-              )}
-              {s.phone && (
-                <p className="flex items-center gap-2">
-                  <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span>{s.phone}</span>
-                </p>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-center">
-              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                <span className="text-[10px] text-slate-500 font-bold uppercase block">Stock de Autos</span>
-                <strong className="text-base text-slate-900 font-black">{s._count?.vehiculos || 0}</strong>
-              </div>
-              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                <span className="text-[10px] text-slate-500 font-bold uppercase block">Ventas Cerradas</span>
-                <strong className="text-base text-slate-900 font-black">{s._count?.ventas || 0}</strong>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 space-y-4 shadow-2xl border border-slate-200">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-black text-lg text-slate-900">Nueva Sucursal</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Nombre de la Sucursal
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="ej: Salón Libertador"
-                  value={form.name}
-                  onChange={(e) => {
-                    const name = e.target.value;
-                    const code = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-                    setForm({ ...form, name, code: form.code ? form.code : code });
-                  }}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Código Interno
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="libertador"
-                  value={form.code}
-                  onChange={(e) => setForm({ ...form, code: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 font-mono focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Dirección
-                </label>
-                <input
-                  type="text"
-                  placeholder="ej: Av. Libertador 4500"
-                  value={form.address}
-                  onChange={(e) => setForm({ ...form, address: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Teléfono Comercial
-                </label>
-                <input
-                  type="text"
-                  placeholder="ej: 011 4788-0000"
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-800"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 disabled:opacity-50"
-                >
-                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Crear Sucursal'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+    {isModalOpen && <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"><div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden"><div className="px-6 py-4 bg-slate-50 border-b flex justify-between items-center"><div><h3 className="font-black text-xl text-slate-900">Nueva sucursal</h3><p className="text-xs text-slate-500">Definí la sede operativa y su código interno.</p></div><button onClick={() => setIsModalOpen(false)} className="p-2 rounded-xl hover:bg-slate-200"><X className="w-5 h-5" /></button></div><form onSubmit={handleSubmit} className="p-6 space-y-4"><div><label className={label}>Nombre *</label><input required value={form.name} onChange={(e) => { const name = e.target.value; setForm((p) => ({ ...p, name, code: p.code || name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') })); }} className={input} placeholder="Salón Centro" /></div><div><label className={label}>Código interno *</label><input required value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} className={`${input} font-mono`} placeholder="centro" /></div><div><label className={label}>Dirección</label><input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className={input} /></div><div><label className={label}>Teléfono</label><input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={input} /></div><label className="flex items-center gap-3 rounded-xl bg-blue-50 border border-blue-100 p-3 text-sm font-bold text-blue-900"><input type="checkbox" checked={form.isMain} onChange={(e) => setForm({ ...form, isMain: e.target.checked })} />Definir como sede principal</label><div className="pt-4 border-t flex justify-end gap-3"><button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-3 bg-slate-100 rounded-xl font-bold text-slate-700">Cancelar</button><button type="submit" disabled={isSubmitting} className="px-5 py-3 bg-blue-600 text-white rounded-xl font-black flex items-center gap-2 disabled:opacity-50">{isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Crear</button></div></form></div></div>}
+  </div>;
 }
+
+function Metric({ icon: Icon, label, value }: any) { return <div className="bg-slate-50 rounded-xl p-3 text-center"><Icon className="w-4 h-4 text-slate-400 mx-auto" /><p className="text-[10px] uppercase font-black text-slate-400 mt-1">{label}</p><strong className="text-xl text-slate-900">{value}</strong></div>; }
