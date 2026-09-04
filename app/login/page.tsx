@@ -23,6 +23,10 @@ function LoginForm() {
     const res = await loginAction({ email, password });
 
     if (!res.success) {
+      if ('suspended' in res && res.suspended) {
+        router.push('/suspendido');
+        return;
+      }
       setError(res.error || 'Credenciales incorrectas.');
       setLoading(false);
       return;
