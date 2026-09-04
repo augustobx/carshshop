@@ -32,6 +32,20 @@ function revalidateFinancialViews() {
   revalidatePath('/pwa/operaciones');
 }
 
+async function normalizeLogoUrl(tenantId: string, logoUrl?: string | null): Promise<string | null> {
+  const value = String(logoUrl || '').trim();
+  if (!value) return null;
+  if (!value.startsWith('data:')) return value;
+
+  const match = value.match(/^data:(image\/(?:jpeg|jpg|png|webp|avif));base64,(.+)$/i);
+  if (!match) throw new Error('El logo inline legacy tiene un formato no soportado.');
+  const mimeType = match[1].toLowerCase();
+  const buffer = Buffer.from(match[2], 'base64');
+  const extension = mimeType.includes('png') ? 'png' : mimeType.includes('webp') ? 'webp' : mimeType.includes('avif') ? 'avif' : 'jpg';
+  const uploaded = await getObjectStorage().upload({ tenantId, folder: 'branding', fileName: `logo_legacy.${extension}`, mimeType, buffer });
+  return uploaded.url;
+}
+
 export async function subirLogoTenant(formData: FormData) {
   try {
     const tenant = await getTenantContext();
@@ -39,19 +53,8 @@ export async function subirLogoTenant(formData: FormData) {
     const file = formData.get('file') as File | null;
     if (!file || !file.size) return { success: false, error: 'Seleccioná una imagen.' };
 
-    const uploaded = await getObjectStorage().upload({
-      tenantId: tenant.id,
-      folder: 'branding',
-      fileName: file.name,
-      mimeType: file.type,
-      buffer: Buffer.from(await file.arrayBuffer()),
-    });
-
-    await db.tenantSettings.upsert({
-      where: { tenantId: tenant.id },
-      update: { logoUrl: uploaded.url },
-      create: { tenantId: tenant.id, appName: tenant.name, logoUrl: uploaded.url },
-    });
+    const uploaded = await getObjectStorage().upload({ tenantId: tenant.id, folder: 'branding', fileName: file.name, mimeType: file.type, buffer: Buffer.from(await file.arrayBuffer()) });
+    await db.tenantSettings.upsert({ where: { tenantId: tenant.id }, update: { logoUrl: uploaded.url }, create: { tenantId: tenant.id, appName: tenant.name, logoUrl: uploaded.url } });
     revalidatePath('/', 'layout');
     revalidatePath('/configuracion');
     revalidatePath('/pwa', 'layout');
@@ -95,8 +98,8 @@ export async function guardarConfiguracion(data: {
     if (!['blue', 'oficial', 'mep'].includes(data.tipoDolar)) return { success: false, error: 'Tipo de dólar inválido.' };
     if (data.primaryColor && !HEX_RE.test(data.primaryColor)) return { success: false, error: 'Color principal inválido.' };
     if (data.secondaryColor && !HEX_RE.test(data.secondaryColor)) return { success: false, error: 'Color secundario inválido.' };
-    if (data.logoUrl?.startsWith('data:')) return { success: false, error: 'El logo debe subirse al almacenamiento de Cloudflare.' };
 
+    const logoUrl = await normalizeLogoUrl(tenant.id, data.logoUrl);
     const settings = await db.$transaction(async (tx) => {
       await tx.tenant.update({ where: { id: tenant.id }, data: { name: appName, cuit, address: direccion, phone: telefono, email } });
       const values = {
@@ -105,7 +108,7 @@ export async function guardarConfiguracion(data: {
         tipoDolar: data.tipoDolar,
         tnaFinanciacion: Math.max(0, Number(data.tnaFinanciacion || 0)),
         comisionVentaDefecto: Math.max(0, Number(data.comisionVentaDefecto || 0)),
-        logoUrl: data.logoUrl || null,
+        logoUrl,
         primaryColor: data.primaryColor || '#2563eb',
         secondaryColor: data.secondaryColor || '#0f172a',
         telefonoContacto: telefono,
@@ -126,7 +129,7 @@ export async function guardarConfiguracion(data: {
     return { success: true, settings };
   } catch (error: any) {
     console.error('Error guardando configuración:', error);
-    return { success: false, error: 'No se pudo guardar la configuración.' };
+    return { success: false, error: error?.message || 'No se pudo guardar la configuración.' };
   }
 }
 
