@@ -1,6 +1,7 @@
 'use client';
 
 import { Banknote, DollarSign } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 
 type DualCurrencyInputProps = {
   label: string;
@@ -15,6 +16,16 @@ type DualCurrencyInputProps = {
   usdPlaceholder?: string;
 };
 
+function parseAmount(value: string): number | null {
+  if (!value) return null;
+  const parsed = Number(value.replace(/\s/g, '').replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function moneyInput(value: number) {
+  return Number(value.toFixed(2)).toString();
+}
+
 export default function DualCurrencyInput({
   label,
   ars,
@@ -27,21 +38,42 @@ export default function DualCurrencyInput({
   arsPlaceholder = 'Monto en pesos',
   usdPlaceholder = 'Monto en dólares',
 }: DualCurrencyInputProps) {
+  const lastEdited = useRef<'ARS' | 'USD'>('ARS');
+  const previousRate = useRef(Number(rate || 0));
+  const safeRate = Number(rate || 0);
+
   const syncFromArs = (value: string) => {
-    const parsed = Number(value);
+    lastEdited.current = 'ARS';
+    const parsed = parseAmount(value);
     onChange({
       ars: value,
-      usd: value && Number.isFinite(parsed) && rate > 0 ? (parsed / rate).toFixed(2) : '',
+      usd: parsed !== null && safeRate > 0 ? moneyInput(parsed / safeRate) : '',
     });
   };
 
   const syncFromUsd = (value: string) => {
-    const parsed = Number(value);
+    lastEdited.current = 'USD';
+    const parsed = parseAmount(value);
     onChange({
       usd: value,
-      ars: value && Number.isFinite(parsed) && rate > 0 ? (parsed * rate).toFixed(2) : '',
+      ars: parsed !== null && safeRate > 0 ? moneyInput(parsed * safeRate) : '',
     });
   };
+
+  // Si cambia la cotización mientras el formulario está abierto, recalculamos la moneda derivada.
+  useEffect(() => {
+    if (safeRate <= 0 || previousRate.current === safeRate) return;
+    previousRate.current = safeRate;
+
+    if (lastEdited.current === 'USD') {
+      const parsedUsd = parseAmount(usd);
+      if (parsedUsd !== null) onChange({ usd, ars: moneyInput(parsedUsd * safeRate) });
+      return;
+    }
+
+    const parsedArs = parseAmount(ars);
+    if (parsedArs !== null) onChange({ ars, usd: moneyInput(parsedArs / safeRate) });
+  }, [safeRate]); // intencional: sólo reacciona al cambio de cotización
 
   return (
     <fieldset className="space-y-2">
@@ -85,7 +117,7 @@ export default function DualCurrencyInput({
         </label>
       </div>
       <p className="text-[11px] text-slate-400">
-        {helper || `Conversión automática con cotización $ ${Number(rate || 0).toLocaleString('es-AR')}. Podés editar cualquiera de las dos monedas.`}
+        {helper || `Conversión automática con cotización $ ${safeRate.toLocaleString('es-AR')}. Podés editar cualquiera de las dos monedas.`}
       </p>
     </fieldset>
   );
