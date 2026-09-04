@@ -15,7 +15,7 @@ export default async function PwaOperacionesPage() {
     where: { tenantId: tenant.id, vendedorId: user.id },
     include: {
       cliente: { select: { id_cliente: true, nombre_completo: true, telefono: true } },
-      vehiculo_interes: { select: { id_vehiculo: true, marca: true, modelo: true, version: true, patente: true, anio: true } },
+      vehiculo_interes: { include: { fotos: { orderBy: [{ orden: 'asc' }, { id_foto: 'asc' }], take: 1 } } },
       cotizaciones: { orderBy: { createdAt: 'desc' }, take: 1 },
       senias: { where: { estado: 'ACTIVA' }, orderBy: { fecha_senia: 'desc' }, take: 1 },
       ventas: { include: { entrega: true }, orderBy: { fecha_venta: 'desc' }, take: 1 },
@@ -40,23 +40,10 @@ export default async function PwaOperacionesPage() {
       updatedAt: p.updatedAt.toISOString(),
       vehiculo: p.vehiculo_interes ? `${p.vehiculo_interes.marca} ${p.vehiculo_interes.modelo}${p.vehiculo_interes.version ? ` ${p.vehiculo_interes.version}` : ''}` : 'Sin unidad',
       patente: p.vehiculo_interes?.patente || null,
-      cotizacion: q ? {
-        id: q.id_cotizacion,
-        estado: q.estado,
-        usd: Number(q.precio_final_usd || 0),
-        rate: Number(q.cotizacion_dolar || dolarActual),
-        ars: Number(q.precio_final_usd || 0) * Number(q.cotizacion_dolar || dolarActual),
-        fecha: q.createdAt.toISOString(),
-        validez: q.validez_hasta?.toISOString() || null,
-      } : null,
+      foto: p.vehiculo_interes?.fotos[0]?.url_foto || null,
+      cotizacion: q ? { id: q.id_cotizacion, estado: q.estado, usd: Number(q.precio_final_usd || 0), rate: Number(q.cotizacion_dolar || dolarActual), ars: Number(q.precio_final_usd || 0) * Number(q.cotizacion_dolar || dolarActual), fecha: q.createdAt.toISOString(), validez: q.validez_hasta?.toISOString() || null } : null,
       reserva: s ? { id: s.id_senia, ars: Number(s.monto_ars || 0), usd: Number(s.monto_usd || 0), fecha: s.fecha_senia.toISOString() } : null,
-      venta: v ? {
-        id: v.id_venta,
-        boleto: v.numero_boleto,
-        fecha: v.fecha_venta.toISOString(),
-        entrega_estado: delivery?.estado || 'PENDIENTE',
-        entrega_programada: delivery?.fecha_programada?.toISOString() || null,
-      } : null,
+      venta: v ? { id: v.id_venta, boleto: v.numero_boleto, fecha: v.fecha_venta.toISOString(), entrega_estado: delivery?.estado || 'PENDIENTE', entrega_programada: delivery?.fecha_programada?.toISOString() || null } : null,
     };
   });
 
