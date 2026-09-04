@@ -29,11 +29,11 @@ COPY package.json package-lock.json ./
 COPY prisma ./prisma
 CMD ["sh", "-c", "./node_modules/.bin/prisma generate && ./node_modules/.bin/prisma db push"]
 
-# Imagen para inicialización y seed inicial idempotente.
-# Después del seed se fuerzan los usuarios definidos por entorno y se valida todo el circuito auth.
+# Imagen para inicialización idempotente completa.
+# Orden: schema -> seed -> dominios SaaS -> usuarios auth -> self-check auth.
 FROM database-migrate AS database-init
 COPY scripts ./scripts
-CMD ["sh", "-c", "./node_modules/.bin/prisma generate && ./node_modules/.bin/prisma db push && node scripts/seed-saas.mjs && node scripts/ensure-auth-users.mjs && node scripts/check-auth-bootstrap.mjs"]
+CMD ["sh", "-c", "./node_modules/.bin/prisma generate && ./node_modules/.bin/prisma db push && node scripts/seed-saas.mjs && node scripts/fix-tenant-domains.mjs && node scripts/ensure-auth-users.mjs && node scripts/check-auth-bootstrap.mjs"]
 
 FROM base AS runner
 WORKDIR /app
