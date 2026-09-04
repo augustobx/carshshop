@@ -90,6 +90,56 @@ export async function crearUsuario(data: {
   }
 }
 
+export async function cambiarClaveUsuario(membershipId: string, nuevaClave: string) {
+  try {
+    const tenant = await getTenantContext();
+    const { role, user: actor } = await requireTenantRole(tenant.id, ADMIN_ROLES);
+
+    if (!nuevaClave || nuevaClave.length < 8) {
+      return { success: false, error: 'La nueva contraseña debe tener al menos 8 caracteres.' };
+    }
+
+    const membership = await db.tenantMembership.findFirst({
+      where: { id: membershipId, tenantId: tenant.id, isActive: true },
+      include: { user: true },
+    });
+    if (!membership) return { success: false, error: 'El colaborador no existe o está desactivado.' };
+
+    if (membership.role === RolMembresia.OWNER && role !== RolMembresia.OWNER && !actor.isSuperAdmin) {
+      return { success: false, error: 'Sólo un OWNER puede cambiar la clave de otro OWNER.' };
+    }
+
+    // User es global. Un administrador de tenant no puede alterar una cuenta compartida con otra concesionaria.
+    const otherActiveMemberships = await db.tenantMembership.count({
+      where: { userId: membership.userId, isActive: true, tenantId: { not: tenant.id } },
+    });
+    if (otherActiveMemberships > 0 && !actor.isSuperAdmin) {
+      return { success: false, error: 'Este usuario también pertenece a otra concesionaria. La clave global sólo puede cambiarla un SuperAdmin.' };
+    }
+
+    const passwordHash = await hashUserPassword(nuevaClave);
+    await db.$transaction([
+      db.user.update({ where: { id: membership.userId }, data: { passwordHash } }),
+      db.userSession.deleteMany({ where: { userId: membership.userId } }),
+      db.platformAuditLog.create({
+        data: {
+          tenantId: tenant.id,
+          userId: actor.id,
+          action: 'EMPLOYEE_PASSWORD_RESET',
+          resource: `User:${membership.userId}`,
+          details: { membershipId: membership.id, targetEmail: membership.user.email },
+        },
+      }),
+    ]);
+
+    revalidatePath('/usuarios');
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error cambiando clave de usuario:', error);
+    return { success: false, error: 'No se pudo cambiar la contraseña del colaborador.' };
+  }
+}
+
 export async function eliminarUsuario(membershipId: string) {
   try {
     const tenant = await getTenantContext();
