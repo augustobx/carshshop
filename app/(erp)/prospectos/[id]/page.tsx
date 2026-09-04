@@ -5,12 +5,18 @@ import OperacionComercialClient from './OperacionComercialClient';
 
 export const dynamic = 'force-dynamic';
 
+function moneyDetail(usd: number, rate: number) {
+  const ars = Number(usd || 0) * Number(rate || 0);
+  return `$ ${ars.toLocaleString('es-AR', { maximumFractionDigits: 0 })} ARS · U$S ${Number(usd || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 })}`;
+}
+
 export default async function OperacionComercialPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const prospectoId = Number(id);
   if (!Number.isInteger(prospectoId)) notFound();
 
   const tenant = await getTenantContext();
+  const dolarActual = Number(tenant.settings?.dolarActual || 1400);
 
   const [prospectoDb, vehiculosDb] = await Promise.all([
     db.prospecto.findFirst({
@@ -46,6 +52,7 @@ export default async function OperacionComercialPage({ params }: { params: Promi
         patente: true,
         estado: true,
         precio_venta_usd: true,
+        precio_venta_ars: true,
       },
       orderBy: [{ marca: 'asc' }, { modelo: 'asc' }],
     }),
@@ -88,7 +95,11 @@ export default async function OperacionComercialPage({ params }: { params: Promi
     })),
   };
 
-  const vehiculos = vehiculosDb.map((v) => ({ ...v, precio_venta_usd: Number(v.precio_venta_usd || 0) }));
+  const vehiculos = vehiculosDb.map((v) => ({
+    ...v,
+    precio_venta_usd: Number(v.precio_venta_usd || 0),
+    precio_venta_ars: Number(v.precio_venta_ars || 0),
+  }));
 
   const timeline = [
     {
@@ -102,14 +113,14 @@ export default async function OperacionComercialPage({ params }: { params: Promi
       id: `cotizacion-${c.id_cotizacion}`,
       type: 'COTIZACION',
       title: `Cotización #${c.id_cotizacion}`,
-      detail: `${c.estado} · USD ${Number(c.precio_final_usd).toLocaleString('es-AR')}`,
+      detail: `${c.estado} · ${moneyDetail(Number(c.precio_final_usd), Number(c.cotizacion_dolar))}`,
       date: c.createdAt,
     })),
     ...prospectoDb.senias.map((s) => ({
       id: `reserva-${s.id_senia}`,
       type: 'RESERVA',
       title: `Reserva ${s.recibo_nro || `#${s.id_senia}`}`,
-      detail: `${s.estado} · USD ${Number(s.monto_usd).toLocaleString('es-AR')}`,
+      detail: `${s.estado} · $ ${Number(s.monto_ars).toLocaleString('es-AR')} ARS · U$S ${Number(s.monto_usd).toLocaleString('es-AR')}`,
       date: s.fecha_senia,
     })),
     ...prospectoDb.ventas.flatMap((v) => [
@@ -117,7 +128,7 @@ export default async function OperacionComercialPage({ params }: { params: Promi
         id: `venta-${v.id_venta}`,
         type: 'VENTA',
         title: `Venta ${v.numero_boleto || `#${v.id_venta}`}`,
-        detail: `USD ${Number(v.precio_final_usd).toLocaleString('es-AR')}`,
+        detail: moneyDetail(Number(v.precio_final_usd), Number(v.cotizacion_dolar_venta || dolarActual)),
         date: v.fecha_venta,
       },
       ...(v.entrega
@@ -136,7 +147,7 @@ export default async function OperacionComercialPage({ params }: { params: Promi
     <OperacionComercialClient
       prospecto={prospecto as any}
       vehiculos={vehiculos as any[]}
-      dolarActual={tenant.settings?.dolarActual || 1400}
+      dolarActual={dolarActual}
       timeline={timeline as any[]}
     />
   );
