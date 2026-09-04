@@ -111,13 +111,15 @@ export async function registrarReservaProspecto(data: { prospectoId: number; cot
       const senia = await tx.senia.create({ data: { tenantId: tenant.id, locationId: vehicle.locationId || tenant.primaryLocationId || null, id_vehiculo: vehicle.id_vehiculo, id_cliente: clienteId, prospectoId: prospecto.id_prospecto, cotizacionId: cotizacion?.id_cotizacion || null, monto_usd: monto, monto_ars: monto * rate, cotizacion: rate, fecha_limite: limit, estado: 'ACTIVA' } });
       const reciboNro = `RES-${new Date().getFullYear()}-${String(senia.id_senia).padStart(6, '0')}`;
       await tx.senia.update({ where: { id_senia: senia.id_senia }, data: { recibo_nro: reciboNro } });
-      await tx.vehiculo.update({ where: { id_vehiculo: vehicle.id_vehiculo }, data: { estado: 'SENADO' } });
+
+      // Reserva comercial independiente del estado operativo de la unidad.
       await tx.prospecto.update({ where: { id_prospecto: prospecto.id_prospecto }, data: { estado: 'RESERVADO', id_cliente: clienteId } });
       if (cotizacion) await tx.cotizacion.update({ where: { id_cotizacion: cotizacion.id_cotizacion }, data: { estado: 'ACEPTADA', id_cliente: clienteId } });
       return { reciboNro, clienteId };
     });
 
     revalidateOperacion(prospecto.id_prospecto, vehicle.id_vehiculo);
+    revalidatePath('/vehiculos'); revalidatePath('/motos'); revalidatePath('/ventas/nueva');
     return { success: true, recibo_nro: result.reciboNro, id_cliente: result.clienteId };
   } catch (error) { console.error('Error registrando reserva:', error); return { success: false, error: 'No se pudo registrar la reserva.' }; }
 }
