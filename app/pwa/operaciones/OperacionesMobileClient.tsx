@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { BookmarkCheck, CalendarClock, ChevronRight, PackageCheck, ReceiptText, Search, Truck } from 'lucide-react';
+import { BookmarkCheck, CalendarClock, CarFront, ChevronRight, PackageCheck, ReceiptText, Search, Truck } from 'lucide-react';
 import PwaBottomNav from '../PwaBottomNav';
 
 function statusLabel(value: string) {
@@ -31,25 +31,22 @@ export default function OperacionesMobileClient({ operaciones }: { operaciones: 
       </header>
 
       <main className="space-y-4 p-4">
-        <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-200/70 p-1.5">
-          <button onClick={() => setFilter('open')} className={`rounded-xl py-2.5 text-sm font-black ${filter === 'open' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>En curso</button>
-          <button onClick={() => setFilter('closed')} className={`rounded-xl py-2.5 text-sm font-black ${filter === 'closed' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Finalizadas</button>
-        </div>
+        <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-200/70 p-1.5"><button onClick={() => setFilter('open')} className={`rounded-xl py-2.5 text-sm font-black ${filter === 'open' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>En curso</button><button onClick={() => setFilter('closed')} className={`rounded-xl py-2.5 text-sm font-black ${filter === 'closed' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Finalizadas</button></div>
 
         {rows.length === 0 ? <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center"><p className="font-black text-slate-700">Sin operaciones</p><p className="mt-1 text-sm text-slate-400">Las cotizaciones guardadas aparecen acá y siguen activas hasta perderse o completar la entrega.</p></div> : rows.map((o) => {
           const overdue = !o.venta && o.proxima_accion && new Date(o.proxima_accion).getTime() < Date.now() && o.estado !== 'PERDIDO';
           const deliveryState = o.venta?.entrega_estado || null;
-          return <Link key={o.id_prospecto} href={`/pwa/operaciones/${o.id_prospecto}`} className="block rounded-3xl border border-slate-200 bg-white p-4 shadow-sm active:scale-[0.99]">
-            <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-lg font-black text-slate-900">{o.nombre}</p><p className="mt-1 truncate text-xs font-bold text-slate-500">{o.vehiculo}{o.patente ? ` · ${o.patente}` : ''}</p></div><span className={`shrink-0 rounded-lg px-2 py-1 text-[10px] font-black uppercase ${o.estado === 'RESERVADO' ? 'bg-orange-100 text-orange-700' : o.estado === 'GANADO' ? 'bg-emerald-100 text-emerald-700' : o.estado === 'PERDIDO' ? 'bg-slate-200 text-slate-600' : 'bg-blue-50 text-blue-700'}`}>{statusLabel(o.estado)}</span></div>
-            {o.cotizacion && <div className="mt-3 rounded-2xl bg-slate-50 p-3"><div className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-400"><ReceiptText className="h-3.5 w-3.5" /> Última cotización</div><p className="mt-1 font-black text-slate-800">$ {Number(o.cotizacion.ars).toLocaleString('es-AR', { maximumFractionDigits: 0 })} · USD {Number(o.cotizacion.usd).toLocaleString('es-AR', { maximumFractionDigits: 2 })}</p></div>}
-            <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3"><div className={`flex min-w-0 items-center gap-2 text-xs font-bold ${overdue ? 'text-red-600' : deliveryState === 'PENDIENTE' ? 'text-violet-700' : 'text-slate-500'}`}>
-              {o.venta ? (deliveryState === 'ENTREGADA' ? <PackageCheck className="h-4 w-4 text-emerald-600" /> : <Truck className="h-4 w-4 text-violet-600" />) : o.reserva ? <BookmarkCheck className="h-4 w-4 text-orange-500" /> : <CalendarClock className="h-4 w-4" />}
-              <span className="truncate">{o.venta ? (deliveryState === 'ENTREGADA' ? 'Venta entregada' : deliveryState === 'PROGRAMADA' && o.venta.entrega_programada ? `Entrega · ${new Date(o.venta.entrega_programada).toLocaleDateString('es-AR')}` : 'Entrega pendiente') : o.reserva ? 'Reserva activa' : o.proxima_accion ? `${overdue ? 'Seguimiento vencido · ' : 'Seguimiento · '}${new Date(o.proxima_accion).toLocaleDateString('es-AR')}` : 'Sin seguimiento agendado'}</span>
-            </div><ChevronRight className="h-5 w-5 shrink-0 text-slate-300" /></div>
+          return <Link key={o.id_prospecto} href={`/pwa/operaciones/${o.id_prospecto}`} className="block overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm active:scale-[0.99]">
+            <div className="flex gap-3 p-4">
+              <div className="flex h-20 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-slate-100 text-slate-300">{o.foto ? <img src={o.foto} alt={o.vehiculo} className="h-full w-full object-cover" loading="lazy" /> : <CarFront className="h-8 w-8" />}</div>
+              <div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="truncate text-lg font-black text-slate-900">{o.nombre}</p><p className="mt-1 truncate text-xs font-bold text-slate-500">{o.vehiculo}{o.patente ? ` · ${o.patente}` : ''}</p></div><span className={`shrink-0 rounded-lg px-2 py-1 text-[10px] font-black uppercase ${o.estado === 'RESERVADO' ? 'bg-orange-100 text-orange-700' : o.estado === 'GANADO' ? 'bg-emerald-100 text-emerald-700' : o.estado === 'PERDIDO' ? 'bg-slate-200 text-slate-600' : 'bg-blue-50 text-blue-700'}`}>{statusLabel(o.estado)}</span></div>
+                {o.cotizacion && <div className="mt-2 flex items-center gap-1.5 text-xs font-black text-slate-700"><ReceiptText className="h-3.5 w-3.5 text-slate-400" />$ {Number(o.cotizacion.ars).toLocaleString('es-AR', { maximumFractionDigits: 0 })}</div>}
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-4 py-3"><div className={`flex min-w-0 items-center gap-2 text-xs font-bold ${overdue ? 'text-red-600' : deliveryState === 'PENDIENTE' ? 'text-violet-700' : 'text-slate-500'}`}>{o.venta ? (deliveryState === 'ENTREGADA' ? <PackageCheck className="h-4 w-4 text-emerald-600" /> : <Truck className="h-4 w-4 text-violet-600" />) : o.reserva ? <BookmarkCheck className="h-4 w-4 text-orange-500" /> : <CalendarClock className="h-4 w-4" />}<span className="truncate">{o.venta ? (deliveryState === 'ENTREGADA' ? 'Venta entregada' : deliveryState === 'PROGRAMADA' && o.venta.entrega_programada ? `Entrega · ${new Date(o.venta.entrega_programada).toLocaleDateString('es-AR')}` : 'Entrega pendiente') : o.reserva ? 'Reserva activa' : o.proxima_accion ? `${overdue ? 'Seguimiento vencido · ' : 'Seguimiento · '}${new Date(o.proxima_accion).toLocaleDateString('es-AR')}` : 'Sin seguimiento agendado'}</span></div><ChevronRight className="h-5 w-5 shrink-0 text-slate-300" /></div>
           </Link>;
         })}
       </main>
-
       <PwaBottomNav active="operations" />
     </div>
   );
