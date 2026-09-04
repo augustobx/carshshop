@@ -24,7 +24,9 @@ export default async function PWALayout({ children }: { children: React.ReactNod
   let tenant;
   try {
     tenant = await getTenantContext();
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('TENANT_RESOLUTION_FAILED:SUSPENDED:')) redirect('/suspendido');
     notFound();
   }
 
