@@ -22,7 +22,7 @@ export async function guardarProspecto(data: {
     const tenant = await getTenantContext();
     const user = await getLoggedUser();
 
-    await db.prospecto.create({
+    const prospecto = await db.prospecto.create({
       data: {
         tenantId: tenant.id,
         nombre: data.nombre.trim(),
@@ -40,8 +40,8 @@ export async function guardarProspecto(data: {
     });
 
     revalidatePath('/prospectos');
-    return { success: true };
-  } catch (error: any) {
+    return { success: true, id_prospecto: prospecto.id_prospecto };
+  } catch (error) {
     console.error('Error guardando prospecto:', error);
     return { success: false, error: 'Ocurrió un error al registrar el prospecto.' };
   }
@@ -55,7 +55,7 @@ export async function actualizarEstadoProspecto(
   try {
     const tenant = await getTenantContext();
 
-    await db.prospecto.update({
+    const actualizado = await db.prospecto.updateMany({
       where: { id_prospecto, tenantId: tenant.id },
       data: {
         estado: nuevoEstado,
@@ -63,9 +63,12 @@ export async function actualizarEstadoProspecto(
       },
     });
 
+    if (!actualizado.count) return { success: false, error: 'Prospecto inexistente.' };
+
     revalidatePath('/prospectos');
+    revalidatePath(`/prospectos/${id_prospecto}`);
     return { success: true };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error actualizando prospecto:', error);
     return { success: false, error: 'Ocurrió un error al actualizar el estado del prospecto.' };
   }
@@ -74,9 +77,12 @@ export async function actualizarEstadoProspecto(
 export async function obtenerProspectos() {
   const tenant = await getTenantContext();
 
-  return await db.prospecto.findMany({
+  return db.prospecto.findMany({
     where: { tenantId: tenant.id },
     include: {
+      cliente: {
+        select: { id_cliente: true, nombre_completo: true },
+      },
       vehiculo_interes: {
         select: {
           id_vehiculo: true,
@@ -84,10 +90,26 @@ export async function obtenerProspectos() {
           modelo: true,
           anio: true,
           patente: true,
+          estado: true,
           precio_venta_usd: true,
         },
       },
+      cotizaciones: {
+        select: { id_cotizacion: true, estado: true, precio_final_usd: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+      },
+      senias: {
+        where: { estado: 'ACTIVA' },
+        select: { id_senia: true, monto_usd: true, fecha_senia: true },
+        take: 1,
+      },
+      ventas: {
+        select: { id_venta: true, numero_boleto: true, fecha_venta: true },
+        orderBy: { fecha_venta: 'desc' },
+        take: 1,
+      },
     },
-    orderBy: { fecha_contacto: 'desc' },
+    orderBy: [{ proxima_accion: 'asc' }, { fecha_contacto: 'desc' }],
   });
 }
