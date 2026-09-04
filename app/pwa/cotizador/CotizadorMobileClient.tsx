@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, ArrowRight, BookmarkCheck, Calculator, CheckCircle2, Clock3, FileText, Loader2, Plus, RefreshCw, ShoppingCart, UserPlus } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, BookmarkCheck, Calculator, CheckCircle2, Clock3, FileText, Loader2, Plus, RefreshCw, Repeat2, ShoppingCart, UserPlus } from 'lucide-react';
 import { guardarCotizacionPwa } from '@/actions/pwa';
 import { guardarCliente } from '@/actions/clientes';
 import { registrarVenta } from '@/actions/ventas';
@@ -41,6 +41,7 @@ function MoneyInput({ label, value, rate, config, onChange, helper }: { label: s
 
 export default function CotizadorMobileClient({ vehiculos, clientes, dolarActual, tnaFinanciacion, reservasActivas, initialVehicleId = '', initialOperation, mode = 'quote', pwaConfig }: Props) {
   const router = useRouter();
+  const previousQuote = initialOperation?.latestQuote || null;
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [localClients, setLocalClients] = useState(clientes);
@@ -48,24 +49,30 @@ export default function CotizadorMobileClient({ vehiculos, clientes, dolarActual
   const [clienteId, setClienteId] = useState(String(initialOperation?.id_cliente || ''));
   const [pricingMode, setPricingMode] = useState<PricingMode>('');
   const [precio, setPrecio] = useState({ ars: '', usd: '' });
-  const [formaPago, setFormaPago] = useState<'Contado' | 'Cuotas'>(initialOperation?.latestQuote?.forma_pago === 'Cuotas' ? 'Cuotas' : 'Contado');
+  const [formaPago, setFormaPago] = useState<'Contado' | 'Cuotas'>(previousQuote?.forma_pago === 'Cuotas' ? 'Cuotas' : 'Contado');
   const [anticipo, setAnticipo] = useState({ ars: '', usd: '' });
-  const [cantidadCuotas, setCantidadCuotas] = useState(String(initialOperation?.latestQuote?.cantidad_cuotas || 12));
+  const [cantidadCuotas, setCantidadCuotas] = useState(String(previousQuote?.cantidad_cuotas || 12));
   const [recargoPct, setRecargoPct] = useState(String(Number(tnaFinanciacion || 0)));
   const [fechaPrimerCuota, setFechaPrimerCuota] = useState(() => { const d = new Date(); d.setMonth(d.getMonth() + 1); return d.toISOString().slice(0, 10); });
   const [validezDias, setValidezDias] = useState('7');
   const [proximaAccion, setProximaAccion] = useState(initialOperation?.proxima_accion ? String(initialOperation.proxima_accion).slice(0, 10) : (() => { const d = new Date(); d.setDate(d.getDate() + 2); return d.toISOString().slice(0, 10); })());
-  const [observaciones, setObservaciones] = useState(initialOperation?.latestQuote?.observaciones || initialOperation?.notas || '');
+  const [observaciones, setObservaciones] = useState(previousQuote?.observaciones || initialOperation?.notas || '');
   const [showNewClient, setShowNewClient] = useState(false);
   const [newClient, setNewClient] = useState({ nombre_completo: '', dni: '', telefono: '', email: '' });
   const [creatingClient, setCreatingClient] = useState(false);
+
+  const [tienePermuta, setTienePermuta] = useState(Boolean(previousQuote?.tiene_permuta));
+  const previousTradeUsd = Number(previousQuote?.valor_permuta_usd || 0);
+  const [valorPermuta, setValorPermuta] = useState({ ars: toInput(previousTradeUsd * dolarActual), usd: toInput(previousTradeUsd) });
+  const [detallePermuta, setDetallePermuta] = useState(String(previousQuote?.detalle_permuta || ''));
+  const [permutaFinal, setPermutaFinal] = useState({ tipo_vehiculo: 'Auto', marca: '', modelo: '', version: '', anio: '', km: '', patente: '', color: '', motor: '' });
 
   const vehiculo = useMemo(() => vehiculos.find((v) => String(v.id_vehiculo) === vehiculoId) || null, [vehiculos, vehiculoId]);
   const cliente = useMemo(() => localClients.find((c) => String(c.id_cliente) === clienteId) || null, [localClients, clienteId]);
   const vehicleReservation = useMemo(() => reservasActivas.find((s) => String(s.id_vehiculo) === vehiculoId) || null, [reservasActivas, vehiculoId]);
   const activeReservation = useMemo(() => vehicleReservation && String(vehicleReservation.id_cliente) === clienteId ? vehicleReservation : null, [vehicleReservation, clienteId]);
   const reservationMismatch = Boolean(vehicleReservation && clienteId && String(vehicleReservation.id_cliente) !== clienteId);
-  const savedQuote = activeReservation?.cotizacion_original || initialOperation?.latestQuote || null;
+  const savedQuote = activeReservation?.cotizacion_original || previousQuote || null;
 
   const vehicleOptions = useMemo(() => vehiculos.map((v) => {
     const r = reservasActivas.find((s) => s.id_vehiculo === v.id_vehiculo);
@@ -78,22 +85,40 @@ export default function CotizadorMobileClient({ vehiculos, clientes, dolarActual
 
   const clientOptions = useMemo(() => localClients.map((c) => ({ value: String(c.id_cliente), label: c.nombre_completo, description: `DNI ${c.dni || 'S/D'}${c.telefono ? ` · ${c.telefono}` : ''}`, searchText: `${c.nombre_completo} ${c.dni || ''} ${c.cuit_cuil || ''} ${c.telefono || ''} ${c.email || ''}` })), [localClients]);
 
+  const syncTradeAtRate = (rate: number, sourceUsd?: number) => {
+    if (!tienePermuta) return;
+    const usd = sourceUsd !== undefined ? sourceUsd : Number(valorPermuta.usd || 0);
+    if (usd > 0 && rate > 0) setValorPermuta({ usd: toInput(usd), ars: toInput(usd * rate) });
+  };
+
   const applyCurrentPrice = (v: any) => {
     const usd = Number(v?.precio_venta_usd || 0);
     const ars = usd > 0 ? usd * dolarActual : Number(v?.precio_venta_ars || 0);
     setPrecio({ ars: toInput(ars), usd: toInput(usd || (dolarActual > 0 ? ars / dolarActual : 0)) });
-    setPricingMode(mode === 'sale' && savedQuote ? 'CURRENT' : 'CURRENT');
+    setPricingMode('CURRENT');
+    syncTradeAtRate(dolarActual);
   };
 
   const applySavedQuote = () => {
     if (!savedQuote) return;
     const rate = Number(savedQuote.rate || dolarActual);
     const usd = Number(savedQuote.precio_usd || 0);
+    const adv = Number(savedQuote.anticipo_usd || 0);
+    const tradeUsd = Number(savedQuote.valor_permuta_usd || 0);
     setPrecio({ ars: toInput(usd * rate), usd: toInput(usd) });
     setFormaPago(savedQuote.forma_pago === 'Cuotas' ? 'Cuotas' : 'Contado');
-    const adv = Number(savedQuote.anticipo_usd || 0);
     setAnticipo({ ars: toInput(adv * rate), usd: toInput(adv) });
+    setTienePermuta(Boolean(savedQuote.tiene_permuta));
+    setDetallePermuta(String(savedQuote.detalle_permuta || ''));
+    setValorPermuta({ ars: toInput(tradeUsd * rate), usd: toInput(tradeUsd) });
     if (savedQuote.cantidad_cuotas) setCantidadCuotas(String(savedQuote.cantidad_cuotas));
+    const installments = Number(savedQuote.cantidad_cuotas || 0);
+    const installmentUsd = Number(savedQuote.valor_cuota_usd || 0);
+    const capitalUsd = Math.max(0, usd - adv - tradeUsd);
+    if (installments > 0 && installmentUsd > 0 && capitalUsd > 0) {
+      const implied = Math.max(0, ((installmentUsd * installments / capitalUsd) - 1) * 100);
+      setRecargoPct(String(Number(implied.toFixed(2))));
+    }
     setPricingMode('SAVED');
   };
 
@@ -118,11 +143,11 @@ export default function CotizadorMobileClient({ vehiculos, clientes, dolarActual
   useEffect(() => {
     if (formaPago !== 'Cuotas') return;
     if (activeReservation) {
-      const rate = pricingMode === 'SAVED' && savedQuote ? Number(savedQuote.rate || dolarActual) : dolarActual;
+      const selectedRate = pricingMode === 'SAVED' && savedQuote ? Number(savedQuote.rate || dolarActual) : dolarActual;
       const ars = Number(activeReservation.monto_ars || 0);
-      setAnticipo({ ars: toInput(ars), usd: toInput(rate > 0 ? ars / rate : 0) });
-    } else if (initialOperation?.latestQuote?.anticipo_usd && !anticipo.usd) {
-      const usd = Number(initialOperation.latestQuote.anticipo_usd || 0);
+      setAnticipo({ ars: toInput(ars), usd: toInput(selectedRate > 0 ? ars / selectedRate : 0) });
+    } else if (previousQuote?.anticipo_usd && !anticipo.usd) {
+      const usd = Number(previousQuote.anticipo_usd || 0);
       setAnticipo({ ars: toInput(usd * dolarActual), usd: toInput(usd) });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -133,12 +158,15 @@ export default function CotizadorMobileClient({ vehiculos, clientes, dolarActual
   const finalUsd = Number(precio.usd || 0);
   const advanceArs = formaPago === 'Cuotas' ? Number(anticipo.ars || 0) : 0;
   const advanceUsd = formaPago === 'Cuotas' ? Number(anticipo.usd || 0) : 0;
-  const capitalArs = formaPago === 'Cuotas' ? Math.max(0, finalArs - advanceArs) : 0;
+  const tradeArs = tienePermuta ? Number(valorPermuta.ars || 0) : 0;
+  const tradeUsd = tienePermuta ? Number(valorPermuta.usd || 0) : 0;
+  const capitalArs = formaPago === 'Cuotas' ? Math.max(0, finalArs - advanceArs - tradeArs) : 0;
   const capitalUsd = rate > 0 ? capitalArs / rate : 0;
   const count = Math.max(1, Number(cantidadCuotas || 1));
   const surcharge = Math.max(0, Number(recargoPct || 0)) / 100;
   const installmentArs = formaPago === 'Cuotas' ? capitalArs * (1 + surcharge) / count : 0;
   const installmentUsd = rate > 0 ? installmentArs / rate : 0;
+  const cashDueArs = Math.max(0, finalArs - tradeArs - Number(activeReservation?.monto_ars || 0));
 
   const createClient = async () => {
     if (!newClient.nombre_completo.trim()) return alert('Ingresá el nombre del cliente.');
@@ -152,10 +180,18 @@ export default function CotizadorMobileClient({ vehiculos, clientes, dolarActual
     setShowNewClient(false);
   };
 
+  const validateCommercialTerms = () => {
+    if (!vehiculo || !cliente || finalUsd <= 0 || finalArs <= 0) return 'Seleccioná cliente, vehículo y precio.';
+    if (reservationMismatch) return pwaConfig.showReservationOwner ? `La unidad está reservada por ${vehicleReservation.cliente_nombre}.` : 'La unidad tiene una reserva activa para otro cliente.';
+    if (tienePermuta && (!detallePermuta.trim() || tradeUsd <= 0)) return 'Completá descripción y valor estimado de la permuta.';
+    if (tradeArs >= finalArs) return 'La permuta debe valer menos que el vehículo vendido.';
+    if (formaPago === 'Cuotas' && advanceArs + tradeArs >= finalArs) return 'Anticipo + permuta deben ser menores al precio final.';
+    return '';
+  };
+
   const saveQuote = async () => {
-    if (!vehiculo || !cliente || finalUsd <= 0 || finalArs <= 0) return alert('Seleccioná cliente, vehículo y precio.');
-    if (reservationMismatch) return alert(pwaConfig.showReservationOwner ? `La unidad está reservada por ${vehicleReservation.cliente_nombre}. Elegí otra unidad o ese cliente.` : 'La unidad tiene una reserva activa para otro cliente.');
-    if (formaPago === 'Cuotas' && advanceArs >= finalArs) return alert('El anticipo debe ser menor al precio final.');
+    const error = validateCommercialTerms();
+    if (error) return alert(error);
     setSubmitting(true);
     const res = await guardarCotizacionPwa({
       prospectoId: initialOperation?.id_prospecto || undefined,
@@ -167,6 +203,9 @@ export default function CotizadorMobileClient({ vehiculos, clientes, dolarActual
       anticipo_usd: formaPago === 'Cuotas' ? Number(advanceUsd.toFixed(2)) : 0,
       cantidad_cuotas: formaPago === 'Cuotas' ? count : undefined,
       valor_cuota_usd: formaPago === 'Cuotas' ? Number(installmentUsd.toFixed(2)) : undefined,
+      tiene_permuta: tienePermuta,
+      detalle_permuta: tienePermuta ? detallePermuta.trim() : undefined,
+      valor_permuta_usd: tienePermuta ? Number(tradeUsd.toFixed(2)) : 0,
       observaciones: observaciones || undefined,
       validez_dias: Number(validezDias || 7),
       proxima_accion: proximaAccion || undefined,
@@ -185,10 +224,11 @@ export default function CotizadorMobileClient({ vehiculos, clientes, dolarActual
   const closeSale = async () => {
     if (!pwaConfig.allowCloseSales) return alert('El cierre de ventas está deshabilitado para vendedores.');
     if (!initialOperation?.id_prospecto) return alert('Primero guardá una cotización para crear la operación.');
-    if (!vehiculo || !cliente || finalUsd <= 0 || finalArs <= 0) return alert('Faltan datos de la operación.');
-    if (reservationMismatch) return alert('La unidad tiene una reserva activa para otro cliente.');
+    const error = validateCommercialTerms();
+    if (error) return alert(error);
     if (savedQuote && !pricingMode) return alert('Elegí si cerrás con la cotización guardada o con el precio vigente.');
-    if (formaPago === 'Cuotas' && advanceArs >= finalArs) return alert('El anticipo debe ser menor al precio final.');
+    if (tienePermuta && (!permutaFinal.marca.trim() || !permutaFinal.modelo.trim() || Number(permutaFinal.anio) <= 0 || Number(permutaFinal.km) < 0)) return alert('Para cerrar la venta completá marca, modelo, año y kilometraje de la permuta.');
+
     setSubmitting(true);
     const res = await registrarVenta({
       id_vehiculo: Number(vehiculo.id_vehiculo), id_cliente: Number(cliente.id_cliente), precio_final_usd: Number(finalUsd.toFixed(2)), cotizacion_dolar: rate, forma_pago: formaPago,
@@ -198,6 +238,13 @@ export default function CotizadorMobileClient({ vehiculos, clientes, dolarActual
       cotizacionId: pricingMode === 'SAVED' ? Number(savedQuote?.id_cotizacion || savedQuote?.id || 0) || undefined : undefined,
       usarCotizacionReserva: Boolean(activeReservation && pricingMode === 'SAVED'),
       cuotas: buildInstallments(),
+      permuta: tienePermuta ? {
+        tipo_vehiculo: permutaFinal.tipo_vehiculo,
+        marca: permutaFinal.marca.trim(), modelo: permutaFinal.modelo.trim(), version: permutaFinal.version.trim() || undefined,
+        anio: Number(permutaFinal.anio), km: Number(permutaFinal.km), patente: permutaFinal.patente.trim() || undefined,
+        color: permutaFinal.color.trim() || undefined, motor: permutaFinal.motor.trim() || undefined,
+        valor_toma_usd: Number(tradeUsd.toFixed(2)),
+      } : undefined,
       observaciones: `Cierre desde PWA. ${pricingMode === 'SAVED' ? 'Se respetó la cotización guardada.' : 'Se aplicó el valor vigente.'}${observaciones ? ` ${observaciones}` : ''}`,
     });
     setSubmitting(false);
@@ -228,11 +275,19 @@ export default function CotizadorMobileClient({ vehiculos, clientes, dolarActual
       {step === 2 && <section className="space-y-4">
         {mode === 'sale' && savedQuote && <section className="space-y-3 rounded-3xl border border-indigo-200 bg-indigo-50 p-5"><div><h2 className="font-black text-indigo-950">¿Qué valor respetamos?</h2><p className="text-xs text-indigo-700">Antes de vender elegí explícitamente la cotización guardada o el precio vigente.</p></div><button type="button" onClick={applySavedQuote} className={`w-full rounded-2xl border p-4 text-left ${pricingMode === 'SAVED' ? 'border-indigo-600 bg-white ring-2 ring-indigo-200' : 'border-indigo-200 bg-white/60'}`}><div className="flex items-center gap-2 text-xs font-black text-indigo-700"><Clock3 className="h-4 w-4" /> Cotización guardada · TC $ {Number(savedQuote.rate || 0).toLocaleString('es-AR')}</div><div className="mt-2"><MoneyLines ars={Number(savedQuote.precio_usd || 0) * Number(savedQuote.rate || 0)} usd={Number(savedQuote.precio_usd || 0)} config={pwaConfig} /></div></button><button type="button" onClick={() => vehiculo && applyCurrentPrice(vehiculo)} className={`w-full rounded-2xl border p-4 text-left ${pricingMode === 'CURRENT' ? 'border-emerald-600 bg-white ring-2 ring-emerald-100' : 'border-emerald-200 bg-white/60'}`}><div className="flex items-center gap-2 text-xs font-black text-emerald-700"><RefreshCw className="h-4 w-4" /> Valor vigente · TC $ {dolarActual.toLocaleString('es-AR')}</div>{vehiculo && <div className="mt-2"><MoneyLines ars={vehiculo.precio_venta_ars} usd={vehiculo.precio_venta_usd} config={pwaConfig} /></div>}</button></section>}
 
-        <section className="space-y-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"><div><h2 className="font-black text-slate-900">Propuesta comercial</h2><p className="text-xs text-slate-500">Definí el precio y condiciones que se le ofrecen al cliente.</p></div><MoneyInput label="Precio cotizado" value={precio} rate={rate} config={pwaConfig} onChange={setPrecio} /><div className="grid grid-cols-2 gap-1.5 rounded-2xl bg-slate-100 p-1.5"><button type="button" onClick={() => setFormaPago('Contado')} className={`rounded-xl py-3 text-sm font-black ${formaPago === 'Contado' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Contado</button><button type="button" onClick={() => setFormaPago('Cuotas')} className={`rounded-xl py-3 text-sm font-black ${formaPago === 'Cuotas' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500'}`}>Financiado</button></div>{formaPago === 'Cuotas' && <div className="space-y-4 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4"><MoneyInput label="Anticipo" value={anticipo} rate={rate} config={pwaConfig} onChange={setAnticipo} helper={activeReservation ? 'La seña ya cobrada se toma como mínimo del anticipo.' : undefined} /><div className="grid grid-cols-2 gap-3"><label><span className="text-[10px] font-black uppercase text-slate-500">Cuotas</span><input type="number" min="1" value={cantidadCuotas} onChange={(e) => setCantidadCuotas(e.target.value)} className="mt-1.5 w-full rounded-xl border p-3" /></label><label><span className="text-[10px] font-black uppercase text-slate-500">Tasa / recargo %</span><input type="number" min="0" step="0.01" value={recargoPct} onChange={(e) => setRecargoPct(e.target.value)} className="mt-1.5 w-full rounded-xl border p-3" /><span className="mt-1 block text-[9px] text-slate-400">Configurado: {Number(tnaFinanciacion || 0).toLocaleString('es-AR')}%</span></label></div><div className="rounded-xl bg-white p-3"><p className="text-[10px] font-black uppercase text-indigo-500">Estimación</p><MoneyLines ars={installmentArs} usd={installmentUsd} config={pwaConfig} /><p className="mt-1 text-[10px] font-bold text-indigo-700">{count} cuotas estimadas</p></div>{mode === 'sale' && <label><span className="text-[10px] font-black uppercase text-slate-500">Vencimiento primera cuota</span><input type="date" value={fechaPrimerCuota} onChange={(e) => setFechaPrimerCuota(e.target.value)} className="mt-1.5 w-full rounded-xl border p-3" /></label>}</div>}</section>
+        <section className="space-y-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"><div><h2 className="font-black text-slate-900">Propuesta comercial</h2><p className="text-xs text-slate-500">Precio, forma de pago y permuta si corresponde.</p></div><MoneyInput label="Precio cotizado" value={precio} rate={rate} config={pwaConfig} onChange={setPrecio} />
+          <div className="grid grid-cols-2 gap-1.5 rounded-2xl bg-slate-100 p-1.5"><button type="button" onClick={() => setFormaPago('Contado')} className={`rounded-xl py-3 text-sm font-black ${formaPago === 'Contado' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Contado</button><button type="button" onClick={() => setFormaPago('Cuotas')} className={`rounded-xl py-3 text-sm font-black ${formaPago === 'Cuotas' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500'}`}>Financiado</button></div>
+
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4"><label className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><Repeat2 className="h-5 w-5 text-amber-700" /><div><p className="font-black text-amber-950">¿Incluye permuta?</p><p className="text-xs text-amber-700">Podés cotizar la toma sin cargar todavía toda la ficha.</p></div></div><input type="checkbox" checked={tienePermuta} onChange={(e) => { setTienePermuta(e.target.checked); if (!e.target.checked) { setValorPermuta({ ars: '', usd: '' }); setDetallePermuta(''); } }} className="h-5 w-5" /></label>{tienePermuta && <div className="mt-4 space-y-3 border-t border-amber-200 pt-4"><label className="block"><span className="text-[10px] font-black uppercase text-amber-800">Vehículo a tomar *</span><input value={detallePermuta} onChange={(e) => setDetallePermuta(e.target.value)} placeholder="Ej: VW Gol 2018, 95.000 km" className="mt-1.5 w-full rounded-xl border border-amber-200 bg-white p-3 text-sm" /></label><MoneyInput label="Valor estimado de toma" value={valorPermuta} rate={rate} config={pwaConfig} onChange={setValorPermuta} /></div>}</div>
+
+          {formaPago === 'Cuotas' && <div className="space-y-4 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4"><MoneyInput label="Anticipo" value={anticipo} rate={rate} config={pwaConfig} onChange={setAnticipo} helper={activeReservation ? 'La seña ya cobrada se toma como mínimo del anticipo.' : undefined} /><div className="grid grid-cols-2 gap-3"><label><span className="text-[10px] font-black uppercase text-slate-500">Cuotas</span><input type="number" min="1" value={cantidadCuotas} onChange={(e) => setCantidadCuotas(e.target.value)} className="mt-1.5 w-full rounded-xl border p-3" /></label><label><span className="text-[10px] font-black uppercase text-slate-500">Tasa / recargo %</span><input type="number" min="0" step="0.01" value={recargoPct} onChange={(e) => setRecargoPct(e.target.value)} className="mt-1.5 w-full rounded-xl border p-3" /><span className="mt-1 block text-[9px] text-slate-400">Configurado: {Number(tnaFinanciacion || 0).toLocaleString('es-AR')}%</span></label></div><div className="rounded-xl bg-white p-3"><p className="text-[10px] font-black uppercase text-indigo-500">Saldo financiado</p><MoneyLines ars={capitalArs} usd={capitalUsd} config={pwaConfig} /><p className="mt-2 text-[10px] font-black uppercase text-indigo-500">Cuota estimada</p><MoneyLines ars={installmentArs} usd={installmentUsd} config={pwaConfig} /><p className="mt-1 text-[10px] font-bold text-indigo-700">{count} cuotas estimadas</p></div>{mode === 'sale' && <label><span className="text-[10px] font-black uppercase text-slate-500">Vencimiento primera cuota</span><input type="date" value={fechaPrimerCuota} onChange={(e) => setFechaPrimerCuota(e.target.value)} className="mt-1.5 w-full rounded-xl border p-3" /></label>}</div>}
+
+          {mode === 'sale' && tienePermuta && <div className="space-y-3 rounded-2xl border border-amber-300 bg-white p-4"><div><p className="font-black text-slate-900">Datos definitivos de la permuta</p><p className="text-xs text-slate-500">Sólo se piden al cerrar porque la unidad tomada va a entrar al stock.</p></div><select value={permutaFinal.tipo_vehiculo} onChange={(e) => setPermutaFinal({ ...permutaFinal, tipo_vehiculo: e.target.value })} className="w-full rounded-xl border p-3 text-sm"><option>Auto</option><option>Moto</option><option>Camioneta</option><option>Utilitario</option><option>Camion</option></select><div className="grid grid-cols-2 gap-2"><input value={permutaFinal.marca} onChange={(e) => setPermutaFinal({ ...permutaFinal, marca: e.target.value })} placeholder="Marca *" className="rounded-xl border p-3 text-sm" /><input value={permutaFinal.modelo} onChange={(e) => setPermutaFinal({ ...permutaFinal, modelo: e.target.value })} placeholder="Modelo *" className="rounded-xl border p-3 text-sm" /><input value={permutaFinal.anio} onChange={(e) => setPermutaFinal({ ...permutaFinal, anio: e.target.value })} type="number" placeholder="Año *" className="rounded-xl border p-3 text-sm" /><input value={permutaFinal.km} onChange={(e) => setPermutaFinal({ ...permutaFinal, km: e.target.value })} type="number" min="0" placeholder="Km *" className="rounded-xl border p-3 text-sm" /><input value={permutaFinal.patente} onChange={(e) => setPermutaFinal({ ...permutaFinal, patente: e.target.value.toUpperCase() })} placeholder="Patente" className="rounded-xl border p-3 text-sm uppercase" /><input value={permutaFinal.version} onChange={(e) => setPermutaFinal({ ...permutaFinal, version: e.target.value })} placeholder="Versión" className="rounded-xl border p-3 text-sm" /><input value={permutaFinal.color} onChange={(e) => setPermutaFinal({ ...permutaFinal, color: e.target.value })} placeholder="Color" className="rounded-xl border p-3 text-sm" /><input value={permutaFinal.motor} onChange={(e) => setPermutaFinal({ ...permutaFinal, motor: e.target.value })} placeholder="Motor" className="rounded-xl border p-3 text-sm" /></div></div>}
+        </section>
       </section>}
 
       {step === 3 && <section className="space-y-4">
-        <section className="rounded-3xl bg-slate-950 p-5 text-white shadow-xl"><p className="text-[10px] font-black uppercase tracking-widest text-blue-400">{mode === 'sale' ? 'Confirmación de cierre' : 'Resumen de cotización'}</p><h2 className="mt-1 text-xl font-black">{vehiculo?.marca} {vehiculo?.modelo}</h2><p className="text-sm font-bold text-slate-400">{cliente?.nombre_completo}</p><div className="my-4 border-y border-slate-800 py-4"><p className="text-[10px] font-black uppercase text-slate-500">Precio</p>{pwaConfig.showArsPrices && <p className="text-2xl font-black">$ {finalArs.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</p>}{pwaConfig.showUsdPrices && <p className="text-sm font-bold text-emerald-400">USD {finalUsd.toLocaleString('es-AR', { maximumFractionDigits: 2 })}</p>}<p className="mt-1 text-[10px] text-slate-500">TC aplicado $ {rate.toLocaleString('es-AR')}</p></div>{formaPago === 'Cuotas' && <div className="rounded-2xl bg-white/5 p-4"><p className="text-[10px] font-black uppercase text-slate-500">Financiación</p><p className="mt-1 font-black">{count} cuotas</p><MoneyLines ars={installmentArs} usd={installmentUsd} config={pwaConfig} /></div>}</section>
+        <section className="rounded-3xl bg-slate-950 p-5 text-white shadow-xl"><p className="text-[10px] font-black uppercase tracking-widest text-blue-400">{mode === 'sale' ? 'Confirmación de cierre' : 'Resumen de cotización'}</p><h2 className="mt-1 text-xl font-black">{vehiculo?.marca} {vehiculo?.modelo}</h2><p className="text-sm font-bold text-slate-400">{cliente?.nombre_completo}</p><div className="my-4 border-y border-slate-800 py-4"><p className="text-[10px] font-black uppercase text-slate-500">Precio</p>{pwaConfig.showArsPrices && <p className="text-2xl font-black">$ {finalArs.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</p>}{pwaConfig.showUsdPrices && <p className="text-sm font-bold text-emerald-400">USD {finalUsd.toLocaleString('es-AR', { maximumFractionDigits: 2 })}</p>}<p className="mt-1 text-[10px] text-slate-500">TC aplicado $ {rate.toLocaleString('es-AR')}</p></div>{tienePermuta && <div className="mb-3 rounded-2xl bg-amber-500/10 p-4"><p className="text-[10px] font-black uppercase text-amber-400">Permuta</p><p className="text-sm font-bold text-amber-100">{detallePermuta}</p><div className="mt-1"><MoneyLines ars={tradeArs} usd={tradeUsd} config={pwaConfig} /></div></div>}{formaPago === 'Cuotas' && <div className="rounded-2xl bg-white/5 p-4"><p className="text-[10px] font-black uppercase text-slate-500">Financiación</p><p className="mt-1 font-black">{count} cuotas</p><MoneyLines ars={installmentArs} usd={installmentUsd} config={pwaConfig} /></div>}{mode === 'sale' && formaPago === 'Contado' && <div className="mt-3 rounded-2xl bg-white/5 p-4"><p className="text-[10px] font-black uppercase text-slate-500">Saldo estimado a cobrar</p><MoneyLines ars={cashDueArs} usd={rate > 0 ? cashDueArs / rate : 0} config={pwaConfig} /></div>}</section>
 
         {mode === 'quote' ? <section className="space-y-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-2"><FileText className="h-5 w-5 text-blue-600" /><div><h2 className="font-black text-slate-900">Guardar para seguimiento</h2><p className="text-xs text-slate-500">La operación queda abierta; no registra una venta.</p></div></div><div className="grid grid-cols-2 gap-3"><label><span className="text-[10px] font-black uppercase text-slate-500">Validez (días)</span><input type="number" min="1" max="90" value={validezDias} onChange={(e) => setValidezDias(e.target.value)} className="mt-1.5 w-full rounded-xl border p-3" /></label><label><span className="text-[10px] font-black uppercase text-slate-500">Próximo contacto</span><input type="date" value={proximaAccion} onChange={(e) => setProximaAccion(e.target.value)} className="mt-1.5 w-full rounded-xl border p-3" /></label></div><label><span className="text-[10px] font-black uppercase text-slate-500">Notas</span><textarea value={observaciones} onChange={(e) => setObservaciones(e.target.value)} placeholder="Interés, objeciones, condiciones habladas..." className="mt-1.5 min-h-24 w-full rounded-xl border p-3 text-sm" /></label><button onClick={saveQuote} disabled={submitting} className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3.5 font-black text-white disabled:opacity-50">{submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />} Guardar cotización</button></section> : <section className="space-y-3 rounded-3xl border border-emerald-200 bg-emerald-50 p-5"><div className="flex gap-2"><ShoppingCart className="h-5 w-5 text-emerald-700" /><div><h2 className="font-black text-emerald-950">Cerrar venta</h2><p className="text-xs text-emerald-700">Sólo llegaste acá desde una operación ya creada.</p></div></div><button onClick={closeSale} disabled={submitting || !pwaConfig.allowCloseSales} className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3.5 font-black text-white disabled:opacity-50">{submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <ShoppingCart className="h-5 w-5" />} Confirmar venta</button></section>}
       </section>}
