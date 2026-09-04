@@ -11,5 +11,14 @@ export default async function NuevoPrestamoPage() {
         orderBy: { nombre_completo: 'asc' }
     });
 
-    return <NuevoPrestamoClient clientes={clientesDb} />;
-}
+    const clientes = clientesDb.map(c => ({
+        id_cliente: c.id_cliente,
+        nombre_completo: c.nombre_completo,
+        dni: c.dni,
+        cuit_cuil: c.cuit_cuil,
+        telefono: c.telefono,
+        email: c.email,
+    }));
+
+    return <NuevoPrestamoClient clientes={clientes} dolarActual={Number(tenant.settings?.dolarActual || 1400)} />;
+}
