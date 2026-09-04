@@ -5,18 +5,21 @@ import VehiculoDashboardClient from './VehiculoDashboardClient';
 
 export const dynamic = 'force-dynamic';
 
+function dualDetail(usd: number, rate: number) {
+  const ars = Number(usd || 0) * Number(rate || 0);
+  return `$ ${ars.toLocaleString('es-AR', { maximumFractionDigits: 0 })} ARS · U$S ${Number(usd || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 })}`;
+}
+
 export default async function DetalleVehiculoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const idVehiculo = Number(id);
   if (!Number.isInteger(idVehiculo)) notFound();
 
   const tenant = await getTenantContext();
+  const dolarActual = Number(tenant.settings?.dolarActual || 1400);
 
   const [clientesDb, vehiculoDb] = await Promise.all([
-    db.cliente.findMany({
-      where: { tenantId: tenant.id },
-      orderBy: { nombre_completo: 'asc' },
-    }),
+    db.cliente.findMany({ where: { tenantId: tenant.id }, orderBy: { nombre_completo: 'asc' } }),
     db.vehiculo.findFirst({
       where: { id_vehiculo: idVehiculo, tenantId: tenant.id },
       include: {
@@ -35,14 +38,8 @@ export default async function DetalleVehiculoPage({ params }: { params: Promise<
           },
           orderBy: { updatedAt: 'desc' },
         },
-        cotizaciones: {
-          include: { prospecto: true, cliente: true, vendedor: true },
-          orderBy: { createdAt: 'desc' },
-        },
-        ventas: {
-          include: { cliente: true, vendedor: true, prospecto: true, entrega: true },
-          orderBy: { fecha_venta: 'desc' },
-        },
+        cotizaciones: { include: { prospecto: true, cliente: true, vendedor: true }, orderBy: { createdAt: 'desc' } },
+        ventas: { include: { cliente: true, vendedor: true, prospecto: true, entrega: true }, orderBy: { fecha_venta: 'desc' } },
       },
     }),
   ]);
@@ -59,16 +56,13 @@ export default async function DetalleVehiculoPage({ params }: { params: Promise<
     gastos_gestoria_usd: Number(vehiculoDb.gastos_gestoria_usd || 0),
     costo_total_real_usd: Number(vehiculoDb.costo_total_real_usd || 0),
     comision_consignacion_pct: Number(vehiculoDb.comision_consignacion_pct || 0),
-    tareas: vehiculoDb.tareas.map((t) => ({
-      ...t,
-      gastos: t.gastos.map((g) => ({ ...g, monto_usd: Number(g.monto_usd), monto_ars: Number(g.monto_ars) })),
-    })),
+    tareas: vehiculoDb.tareas.map((t) => ({ ...t, gastos: t.gastos.map((g) => ({ ...g, monto_usd: Number(g.monto_usd), monto_ars: Number(g.monto_ars) })) })),
     senias: vehiculoDb.senias.map((s) => ({ ...s, monto_usd: Number(s.monto_usd), monto_ars: Number(s.monto_ars), cotizacion: Number(s.cotizacion) })),
     prospectos: vehiculoDb.prospectos.map((p) => ({
       ...p,
       presupuesto_estimado_usd: Number(p.presupuesto_estimado_usd || 0),
-      cotizaciones: p.cotizaciones.map((c) => ({ ...c, precio_final_usd: Number(c.precio_final_usd) })),
-      senias: p.senias.map((s) => ({ ...s, monto_usd: Number(s.monto_usd) })),
+      cotizaciones: p.cotizaciones.map((c) => ({ ...c, precio_final_usd: Number(c.precio_final_usd), cotizacion_dolar: Number(c.cotizacion_dolar) })),
+      senias: p.senias.map((s) => ({ ...s, monto_usd: Number(s.monto_usd), monto_ars: Number(s.monto_ars), cotizacion: Number(s.cotizacion) })),
     })),
     cotizaciones: vehiculoDb.cotizaciones.map((c) => ({
       ...c,
@@ -80,7 +74,7 @@ export default async function DetalleVehiculoPage({ params }: { params: Promise<
     ventas: vehiculoDb.ventas.map((v) => ({
       ...v,
       precio_final_usd: Number(v.precio_final_usd),
-      cotizacion_dolar_venta: Number(v.cotizacion_dolar_venta || 0),
+      cotizacion_dolar_venta: Number(v.cotizacion_dolar_venta || dolarActual),
       valor_toma_permuta_usd: Number(v.valor_toma_permuta_usd || 0),
     })),
   };
@@ -90,13 +84,13 @@ export default async function DetalleVehiculoPage({ params }: { params: Promise<
     ...vehiculoDb.anotaciones.map((a) => ({ id: `nota-${a.id_anotacion}`, type: 'NOTA', title: 'Nota de bitácora', detail: a.texto, date: a.fecha })),
     ...vehiculoDb.tareas.map((t) => ({ id: `tarea-${t.id_tarea}`, type: 'TAREA', title: t.descripcion, detail: t.estado_tarea, date: t.fecha_fin || t.fecha_inicio })),
     ...vehiculoDb.prospectos.map((p) => ({ id: `prospecto-${p.id_prospecto}`, type: 'PROSPECTO', title: `Interés: ${p.nombre}`, detail: p.estado, date: p.createdAt })),
-    ...vehiculoDb.cotizaciones.map((c) => ({ id: `cotizacion-${c.id_cotizacion}`, type: 'COTIZACION', title: `Cotización #${c.id_cotizacion}`, detail: `${c.estado} · USD ${Number(c.precio_final_usd).toLocaleString('es-AR')}`, date: c.createdAt })),
-    ...vehiculoDb.senias.map((s) => ({ id: `reserva-${s.id_senia}`, type: 'RESERVA', title: `Reserva ${s.recibo_nro || `#${s.id_senia}`}`, detail: `${s.estado} · ${s.cliente.nombre_completo}`, date: s.fecha_senia })),
+    ...vehiculoDb.cotizaciones.map((c) => ({ id: `cotizacion-${c.id_cotizacion}`, type: 'COTIZACION', title: `Cotización #${c.id_cotizacion}`, detail: `${c.estado} · ${dualDetail(Number(c.precio_final_usd), Number(c.cotizacion_dolar || dolarActual))}`, date: c.createdAt })),
+    ...vehiculoDb.senias.map((s) => ({ id: `reserva-${s.id_senia}`, type: 'RESERVA', title: `Reserva ${s.recibo_nro || `#${s.id_senia}`}`, detail: `${s.estado} · ${s.cliente.nombre_completo} · $ ${Number(s.monto_ars).toLocaleString('es-AR')} ARS · U$S ${Number(s.monto_usd).toLocaleString('es-AR')}`, date: s.fecha_senia })),
     ...vehiculoDb.ventas.flatMap((v) => [
-      { id: `venta-${v.id_venta}`, type: 'VENTA', title: `Venta ${v.numero_boleto || `#${v.id_venta}`}`, detail: `${v.cliente.nombre_completo} · USD ${Number(v.precio_final_usd).toLocaleString('es-AR')}`, date: v.fecha_venta },
+      { id: `venta-${v.id_venta}`, type: 'VENTA', title: `Venta ${v.numero_boleto || `#${v.id_venta}`}`, detail: `${v.cliente.nombre_completo} · ${dualDetail(Number(v.precio_final_usd), Number(v.cotizacion_dolar_venta || dolarActual))}`, date: v.fecha_venta },
       ...(v.entrega ? [{ id: `entrega-${v.entrega.id_entrega}`, type: 'ENTREGA', title: v.entrega.estado === 'ENTREGADA' ? 'Unidad entregada' : 'Entrega programada', detail: v.entrega.estado, date: v.entrega.fecha_entrega || v.entrega.fecha_programada || v.entrega.createdAt }] : []),
     ]),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  return <VehiculoDashboardClient vehiculo={vehiculoData as any} clientes={clientesDb as any[]} timeline={timeline as any[]} />;
+  return <VehiculoDashboardClient vehiculo={vehiculoData as any} clientes={clientesDb as any[]} timeline={timeline as any[]} dolarActual={dolarActual} />;
 }
