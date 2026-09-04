@@ -32,53 +32,68 @@ export async function guardarConfiguracion(data: {
     await requireTenantRole(tenant.id, CONFIG_ROLES);
 
     const dolar = Number(data.dolarActual);
+    const appName = data.appName?.trim() || tenant.name;
+    const razonSocial = data.razonSocial?.trim() || appName;
+    const telefono = data.telefonoContacto?.trim() || null;
+    const email = data.emailContacto?.trim() || null;
+    const cuit = data.cuit?.trim() || null;
+    const direccion = data.direccion?.trim() || null;
+
     if (!Number.isFinite(dolar) || dolar <= 0) return { success: false, error: 'La cotización del dólar debe ser mayor a cero.' };
     if (!['blue', 'oficial', 'mep'].includes(data.tipoDolar)) return { success: false, error: 'Tipo de dólar inválido.' };
     if (data.primaryColor && !HEX_RE.test(data.primaryColor)) return { success: false, error: 'Color principal inválido.' };
     if (data.secondaryColor && !HEX_RE.test(data.secondaryColor)) return { success: false, error: 'Color secundario inválido.' };
     if (data.logoUrl?.startsWith('data:') && data.logoUrl.length > 1_500_000) return { success: false, error: 'El logo es demasiado pesado. Usá una imagen menor a 1 MB.' };
 
-    const settings = await db.tenantSettings.upsert({
-      where: { tenantId: tenant.id },
-      update: {
-        appName: data.appName?.trim() || tenant.name,
-        dolarActual: dolar,
-        tipoDolar: data.tipoDolar,
-        tnaFinanciacion: Math.max(0, Number(data.tnaFinanciacion || 0)),
-        comisionVentaDefecto: Math.max(0, Number(data.comisionVentaDefecto || 0)),
-        logoUrl: data.logoUrl || null,
-        primaryColor: data.primaryColor || '#2563eb',
-        secondaryColor: data.secondaryColor || '#0f172a',
-        telefonoContacto: data.telefonoContacto?.trim() || null,
-        emailContacto: data.emailContacto?.trim() || null,
-        whatsappLead: data.whatsappLead?.trim() || null,
-        cuit: data.cuit?.trim() || null,
-        razonSocial: data.razonSocial?.trim() || null,
-        direccion: data.direccion?.trim() || null,
-        pieImpresion: data.pieImpresion?.trim() || null,
-      },
-      create: {
-        tenantId: tenant.id,
-        appName: data.appName?.trim() || tenant.name,
-        dolarActual: dolar,
-        tipoDolar: data.tipoDolar,
-        tnaFinanciacion: Math.max(0, Number(data.tnaFinanciacion || 0)),
-        comisionVentaDefecto: Math.max(0, Number(data.comisionVentaDefecto || 0)),
-        logoUrl: data.logoUrl || null,
-        primaryColor: data.primaryColor || '#2563eb',
-        secondaryColor: data.secondaryColor || '#0f172a',
-        telefonoContacto: data.telefonoContacto?.trim() || null,
-        emailContacto: data.emailContacto?.trim() || null,
-        whatsappLead: data.whatsappLead?.trim() || null,
-        cuit: data.cuit?.trim() || null,
-        razonSocial: data.razonSocial?.trim() || null,
-        direccion: data.direccion?.trim() || null,
-        pieImpresion: data.pieImpresion?.trim() || null,
-      },
+    const settings = await db.$transaction(async (tx) => {
+      await tx.tenant.update({
+        where: { id: tenant.id },
+        data: { name: appName, cuit, address: direccion, phone: telefono, email },
+      });
+
+      return tx.tenantSettings.upsert({
+        where: { tenantId: tenant.id },
+        update: {
+          appName,
+          dolarActual: dolar,
+          tipoDolar: data.tipoDolar,
+          tnaFinanciacion: Math.max(0, Number(data.tnaFinanciacion || 0)),
+          comisionVentaDefecto: Math.max(0, Number(data.comisionVentaDefecto || 0)),
+          logoUrl: data.logoUrl || null,
+          primaryColor: data.primaryColor || '#2563eb',
+          secondaryColor: data.secondaryColor || '#0f172a',
+          telefonoContacto: telefono,
+          emailContacto: email,
+          whatsappLead: data.whatsappLead?.trim() || null,
+          cuit,
+          razonSocial,
+          direccion,
+          pieImpresion: data.pieImpresion?.trim() || null,
+        },
+        create: {
+          tenantId: tenant.id,
+          appName,
+          dolarActual: dolar,
+          tipoDolar: data.tipoDolar,
+          tnaFinanciacion: Math.max(0, Number(data.tnaFinanciacion || 0)),
+          comisionVentaDefecto: Math.max(0, Number(data.comisionVentaDefecto || 0)),
+          logoUrl: data.logoUrl || null,
+          primaryColor: data.primaryColor || '#2563eb',
+          secondaryColor: data.secondaryColor || '#0f172a',
+          telefonoContacto: telefono,
+          emailContacto: email,
+          whatsappLead: data.whatsappLead?.trim() || null,
+          cuit,
+          razonSocial,
+          direccion,
+          pieImpresion: data.pieImpresion?.trim() || null,
+        },
+      });
     });
 
     revalidatePath('/', 'layout');
     revalidatePath('/configuracion');
+    revalidatePath('/documentos', 'layout');
     return { success: true, settings };
   } catch (error: any) {
     console.error('Error guardando configuración:', error);
@@ -86,7 +101,6 @@ export async function guardarConfiguracion(data: {
   }
 }
 
-// Compatibilidad con llamadas legacy mientras se termina la normalización.
 export async function updateConfig(clave: string, valor: string) {
   try {
     const tenant = await getTenantContext();
