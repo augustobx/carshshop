@@ -30,9 +30,11 @@ services:
     image: onlycars-database-init:latest
     build:
       context: .
-      target: database-migrate
+      target: database-init
     environment:
       DATABASE_URL: mysql://${DB_USER:-onlycars}:${DB_PASSWORD}@db:3306/${DB_NAME:-onlycars}
+      BASE_DOMAIN: ${BASE_DOMAIN:-onlycars.nanoapps.ar}
+      TZ: ${TZ:-America/Argentina/Buenos_Aires}
     depends_on:
       db: { condition: service_healthy }
     networks:
