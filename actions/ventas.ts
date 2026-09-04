@@ -80,8 +80,6 @@ export async function registrarVenta(data: {
       let cotizacionId: number | null = data.cotizacionId || (data.usarCotizacionReserva ? reservaActiva?.cotizacionId || null : null);
       if (data.usarCotizacionReserva && !reservaActiva?.cotizacionRef) throw new Error('La reserva no tiene una cotización histórica vinculada.');
 
-      // Una cotización explícitamente seleccionada se usa sólo si precio y TC siguen coincidiendo.
-      // Si fue editada antes del cierre, se genera una nueva cotización de cierre y la original queda intacta.
       if (cotizacionId) {
         const q = await tx.cotizacion.findFirst({ where: { id_cotizacion: cotizacionId, tenantId: tenant.id, id_vehiculo: data.id_vehiculo } });
         if (!q) throw new Error('La cotización indicada no es válida para esta unidad.');
@@ -96,6 +94,7 @@ export async function registrarVenta(data: {
       let valorTomaPermuta = 0;
       if (data.permuta && Number(data.permuta.valor_toma_usd) > 0) {
         valorTomaPermuta = Number(data.permuta.valor_toma_usd);
+        if (valorTomaPermuta >= precioUsd) throw new Error('El valor de la permuta debe ser menor al precio final de la unidad vendida.');
         if (!data.permuta.marca?.trim() || !data.permuta.modelo?.trim() || !Number.isFinite(Number(data.permuta.anio))) throw new Error('La permuta requiere marca, modelo y año válidos.');
         const permutado = await tx.vehiculo.create({ data: {
           tenantId: tenant.id,
@@ -112,16 +111,27 @@ export async function registrarVenta(data: {
         idVehiculoPermuta = permutado.id_vehiculo;
       }
 
+      // Si la cotización seleccionada tenía condiciones materiales distintas de las del cierre,
+      // no la mutamos: el cierre genera su propio snapshot.
+      if (cotizacionId) {
+        const q = await tx.cotizacion.findUnique({ where: { id_cotizacion: cotizacionId } });
+        if (q) {
+          const samePayment = q.forma_pago === data.forma_pago;
+          const sameTrade = Math.abs(Number(q.valor_permuta_usd || 0) - valorTomaPermuta) <= 0.02;
+          if (data.usarCotizacionReserva && (!samePayment || !sameTrade)) throw new Error('Las condiciones de cierre no coinciden con la cotización reservada seleccionada.');
+          if (!samePayment || !sameTrade) cotizacionId = null;
+        }
+      }
+
       const reservaUsdAplicada = reservaActiva ? Number(reservaActiva.monto_ars || 0) / rate : 0;
       const anticipoSolicitado = Math.max(0, Number(data.anticipo_usd || 0));
-      const anticipo = data.forma_pago === 'Contado' ? precioUsd : Math.max(anticipoSolicitado, reservaUsdAplicada);
+      // En contado con permuta, anticipo_usd representa el efectivo total de la operación antes de descontar una seña ya cobrada.
+      const anticipo = data.forma_pago === 'Contado' ? Math.max(0, precioUsd - valorTomaPermuta) : Math.max(anticipoSolicitado, reservaUsdAplicada);
       const saldo = data.forma_pago === 'Cuotas' ? Math.max(0, precioUsd - anticipo - valorTomaPermuta) : 0;
 
       if (data.forma_pago === 'Cuotas' && anticipo + valorTomaPermuta >= precioUsd) throw new Error('Anticipo y permuta no pueden cubrir o superar el total si la operación se marca financiada.');
       if (data.forma_pago === 'Cuotas' && (!data.cuotas?.length || saldo <= 0)) throw new Error('La venta financiada requiere saldo y plan de cuotas.');
 
-      // Si se eligió un valor distinto a una cotización guardada, el cierre queda documentado
-      // en una nueva cotización, en vez de sobrescribir o vincular incorrectamente la anterior.
       if (!cotizacionId && prospectoId) {
         const closingQuote = await tx.cotizacion.create({ data: {
           tenantId: tenant.id,
@@ -137,6 +147,7 @@ export async function registrarVenta(data: {
           saldo_financiado_usd: saldo,
           valor_permuta_usd: valorTomaPermuta,
           tiene_permuta: Boolean(idVehiculoPermuta),
+          detalle_permuta: idVehiculoPermuta ? `${data.permuta?.marca || ''} ${data.permuta?.modelo || ''} ${data.permuta?.anio || ''}`.trim() : null,
           observaciones: 'Cotización de cierre generada automáticamente con las condiciones finalmente aceptadas.',
         } });
         cotizacionId = closingQuote.id_cotizacion;
