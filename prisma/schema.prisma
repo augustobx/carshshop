@@ -331,7 +331,10 @@ model VehiculoFoto {
   id_foto     Int      @id @default(autoincrement())
   tenantId    String
   id_vehiculo Int
-  url_foto    String
+  url_foto    String   @db.Text
+  object_key  String?  @db.VarChar(512)
+  mime_type   String?  @db.VarChar(100)
+  size_bytes  Int?
   orden       Int      @default(0)
   createdAt   DateTime @default(now())
 
@@ -339,6 +342,7 @@ model VehiculoFoto {
   vehiculo Vehiculo @relation(fields: [id_vehiculo], references: [id_vehiculo], onDelete: Cascade)
 
   @@index([tenantId, id_vehiculo])
+  @@index([tenantId, object_key])
 }
 
 model Anotacion {
@@ -618,29 +622,27 @@ model Entrega {
   @@index([tenantId, estado, fecha_programada])
 }
 
-enum EstadoEntrega {
-  PENDIENTE
-  PROGRAMADA
-  ENTREGADA
-}
-
 // ==========================================
-// 7. TALLER, GASTOS Y CAJA POR SUCURSAL
+// 7. TALLER, GASTOS Y CAJA
 // ==========================================
 
 model Tarea {
-  id_tarea     Int         @id @default(autoincrement())
-  tenantId     String
-  id_vehiculo  Int
-  descripcion  String
-  estado_tarea EstadoTarea @default(PENDIENTE)
-  fecha_inicio DateTime    @default(now())
-  fecha_fin    DateTime?
+  id_tarea      Int          @id @default(autoincrement())
+  tenantId      String
+  id_vehiculo   Int
+  descripcion   String
+  estado_tarea  EstadoTarea  @default(PENDIENTE)
+  fecha_inicio  DateTime     @default(now())
+  fecha_fin     DateTime?
+  costo_usd     Decimal?     @default(0) @db.Decimal(10, 2)
+  costo_ars     Decimal?     @default(0) @db.Decimal(12, 2)
+  realizado_por String?
+  notas         String?      @db.Text
 
   tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   vehiculo Vehiculo @relation(fields: [id_vehiculo], references: [id_vehiculo], onDelete: Cascade)
-  gastos   Gasto[]
 
+  @@index([tenantId, estado_tarea])
   @@index([tenantId, id_vehiculo])
 }
 
@@ -649,64 +651,54 @@ model Gasto {
   tenantId        String
   locationId      String?
   id_vehiculo     Int?
-  id_tarea        Int?
   descripcion     String
-  monto_usd       Decimal  @db.Decimal(10, 2)
-  monto_ars       Decimal  @db.Decimal(12, 2)
-  fecha           DateTime @default(now())
   categoria       String?
-  tipo_movimiento String?  @default("EGRESO")
+  tipo_movimiento String   @default("EGRESO")
+  monto_usd       Decimal? @default(0) @db.Decimal(10, 2)
+  monto_ars       Decimal? @default(0) @db.Decimal(12, 2)
+  cotizacion      Decimal? @db.Decimal(10, 2)
+  fecha           DateTime @default(now())
 
   tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   location Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
   vehiculo Vehiculo? @relation(fields: [id_vehiculo], references: [id_vehiculo], onDelete: SetNull)
-  tarea    Tarea?    @relation(fields: [id_tarea], references: [id_tarea], onDelete: SetNull)
 
   @@index([tenantId, fecha])
-  @@index([tenantId, id_vehiculo])
+  @@index([tenantId, tipo_movimiento])
 }
 
 model CashSession {
-  id                String    @id @default(uuid())
-  tenantId          String
-  locationId        String?
-  businessDate      DateTime  @db.Date
-  status            String    @default("OPEN")
-  openingBalanceArs Float     @default(0)
-  openingBalanceUsd Float     @default(0)
-  closingBalanceArs Float?
-  closingBalanceUsd Float?
-  openedByName      String?
-  closedByName      String?
-  openedAt          DateTime  @default(now())
-  closedAt          DateTime?
-  notes             String?   @db.Text
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id           String    @id @default(uuid())
+  tenantId     String
+  locationId   String
+  openedById   String
+  closedById   String?
+  openingCash  Float     @default(0)
+  countedCash  Float?
+  status       String    @default("OPEN")
+  openedAt     DateTime  @default(now())
+  closedAt     DateTime?
 
-  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  location  Location?      @relation(fields: [locationId], references: [id], onDelete: SetNull)
-  movements CashMovement[]
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
 
-  @@index([tenantId, businessDate])
+  @@index([tenantId, locationId, status])
 }
 
 model CashMovement {
-  id            String   @id @default(uuid())
-  tenantId      String
+  id           String   @id @default(uuid())
+  tenantId     String
   cashSessionId String
-  type          String
-  currency      String   @default("ARS")
-  amount        Float
-  category      String
-  description   String   @db.Text
-  createdByName String?
-  createdAt     DateTime @default(now())
+  kind         String
+  amount       Float
+  method       String?
+  reference    String?
+  notes        String?
+  createdAt    DateTime @default(now())
 
-  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  cashSession CashSession @relation(fields: [cashSessionId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@index([tenantId, cashSessionId])
+  @@index([tenantId, cashSessionId, createdAt])
 }
 
 // ==========================================
@@ -721,27 +713,26 @@ enum EstadoVehiculo {
   VENDIDO
 }
 
+enum EstadoTarea {
+  PENDIENTE
+  EN_PROCESO
+  COMPLETADA
+  CANCELADA
+}
+
 enum FormaPago {
   Contado
   Cuotas
 }
 
-enum EstadoCuota {
-  PENDIENTE
-  PAGADA
-}
-
-enum EstadoPrestamo {
-  EN_CURSO
-  FINALIZADO
-}
-
-enum EstadoTarea {
-  PENDIENTE
-  FINALIZADA
-}
-
 enum EstadoSenia {
   ACTIVA
+  VENCIDA
   CANCELADA
+}
+
+enum EstadoEntrega {
+  PENDIENTE
+  PROGRAMADA
+  ENTREGADA
 }
