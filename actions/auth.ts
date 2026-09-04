@@ -74,6 +74,13 @@ export async function loginAction(formData: { email: string; password: string })
 
     const resolved = await resolveTenantByHostname(host);
     if (!resolved.success) {
+      if (resolved.reason === 'SUSPENDED') {
+        return {
+          success: false,
+          suspended: true,
+          error: 'La membresía de esta concesionaria está vencida o suspendida.',
+        };
+      }
       return { success: false, error: 'No se pudo identificar la concesionaria de acceso.' };
     }
 
