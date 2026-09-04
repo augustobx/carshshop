@@ -4,6 +4,8 @@ import { headers } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import {
   verifyUserPassword,
+  upgradeLegacyPasswordHash,
+  isLegacyBcryptHash,
   createUserSession,
   deleteUserSession,
   getLoggedUser,
@@ -33,6 +35,14 @@ export async function loginAction(formData: { email: string; password: string })
 
     if (!user || !(await verifyUserPassword(password, user.passwordHash))) {
       return { success: false, error: 'Credenciales inválidas.' };
+    }
+
+    if (isLegacyBcryptHash(user.passwordHash)) {
+      try {
+        await upgradeLegacyPasswordHash(user.id, password, user.passwordHash);
+      } catch (error) {
+        console.error('No se pudo migrar el hash bcrypt legacy a scrypt:', error);
+      }
     }
 
     const requestHeaders = await headers();
