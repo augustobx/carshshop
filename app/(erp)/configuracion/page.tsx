@@ -3,6 +3,7 @@ import { RolMembresia } from '@prisma/client';
 import { getTenantContext } from '@/lib/tenant-context';
 import { requireTenantRole } from '@/lib/user-auth';
 import { prisma as db } from '@/lib/prisma';
+import { normalizeSellerPwaConfig } from '@/lib/seller-pwa-config';
 import ConfiguracionClient from './ConfiguracionClient';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +16,11 @@ export default async function ConfiguracionPage() {
     redirect('/');
   }
 
-  const s = await db.tenantSettings.findUnique({ where: { tenantId: tenant.id } });
+  const [s, sellerPwaFeature] = await Promise.all([
+    db.tenantSettings.findUnique({ where: { tenantId: tenant.id } }),
+    db.tenantFeature.findUnique({ where: { tenantId_featureKey: { tenantId: tenant.id, featureKey: 'seller_pwa' } } }),
+  ]);
+
   return <ConfiguracionClient initial={{
     tenantName: tenant.name,
     appName: s?.appName || tenant.name,
@@ -33,5 +38,6 @@ export default async function ConfiguracionPage() {
     razonSocial: s?.razonSocial || tenant.name,
     direccion: s?.direccion || tenant.address || '',
     pieImpresion: s?.pieImpresion || '',
+    sellerPwa: normalizeSellerPwaConfig(sellerPwaFeature?.config),
   }} />;
 }
