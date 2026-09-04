@@ -12,6 +12,7 @@ export default async function PWADashboardPage() {
   const [vehiculosDb, reservasDb, sellerPwaFeature] = await Promise.all([
     db.vehiculo.findMany({
       where: { tenantId: tenant.id, estado: { not: 'VENDIDO' } },
+      include: { fotos: { orderBy: [{ orden: 'asc' }, { id_foto: 'asc' }], take: 1 } },
       orderBy: [{ marca: 'asc' }, { modelo: 'asc' }],
     }),
     db.senia.findMany({
@@ -35,6 +36,7 @@ export default async function PWADashboardPage() {
       anio: v.anio || 0,
       km: v.km || 0,
       patente: v.patente || 'S/P',
+      foto: v.fotos[0]?.url_foto || null,
       estado: v.estado === 'SENADO' ? 'LISTO_PARA_VENTA' : v.estado,
       tipo_ingreso: v.tipo_ingreso,
       precio_venta_ars: ventaUsd > 0 ? ventaUsd * dolarActual : Number(v.precio_venta_ars || 0),
@@ -48,8 +50,5 @@ export default async function PWADashboardPage() {
     };
   });
 
-  return <DashboardMobileClient
-    vehiculos={vehiculosPlanos}
-    pwaConfig={normalizeSellerPwaConfig(sellerPwaFeature?.config)}
-  />;
+  return <DashboardMobileClient vehiculos={vehiculosPlanos} pwaConfig={normalizeSellerPwaConfig(sellerPwaFeature?.config)} />;
 }
