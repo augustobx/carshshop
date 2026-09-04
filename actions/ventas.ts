@@ -2,8 +2,11 @@
 
 import { prisma as db } from '@/lib/prisma';
 import { getTenantContext } from '@/lib/tenant-context';
-import { getLoggedUser } from '@/lib/user-auth';
+import { requireTenantRole } from '@/lib/user-auth';
 import { revalidatePath } from 'next/cache';
+import { RolMembresia } from '@prisma/client';
+
+const SALE_ROLES = [RolMembresia.OWNER, RolMembresia.MANAGER, RolMembresia.VENDEDOR];
 
 export async function registrarVenta(data: {
   id_vehiculo: number;
@@ -19,6 +22,7 @@ export async function registrarVenta(data: {
   cotizacionId?: number;
   cuotas?: { numero_cuota: number; monto_usd: number; fecha_vencimiento: string }[];
   permuta?: {
+    tipo_vehiculo?: string;
     marca: string;
     modelo: string;
     version?: string;
@@ -32,185 +36,105 @@ export async function registrarVenta(data: {
 }) {
   try {
     const tenant = await getTenantContext();
-    const user = await getLoggedUser();
+    const { user } = await requireTenantRole(tenant.id, SALE_ROLES);
+    const precioUsd = Number(data.precio_final_usd);
+    const rate = Number(data.cotizacion_dolar);
+    if (!Number.isFinite(precioUsd) || precioUsd <= 0 || !Number.isFinite(rate) || rate <= 0) return { success: false, error: 'Precio final y cotización deben ser mayores a cero.' };
+    if (!['Contado', 'Cuotas'].includes(data.forma_pago)) return { success: false, error: 'Forma de pago inválida.' };
 
     const result = await db.$transaction(async (tx) => {
-      const vehiculoVenta = await tx.vehiculo.findFirst({
-        where: { id_vehiculo: data.id_vehiculo, tenantId: tenant.id },
-      });
-      const clienteVenta = await tx.cliente.findFirst({
-        where: { id_cliente: data.id_cliente, tenantId: tenant.id },
-      });
-
-      if (!vehiculoVenta || !clienteVenta) {
-        throw new Error('Vehículo o cliente inválido para este tenant.');
-      }
+      const [vehiculoVenta, clienteVenta] = await Promise.all([
+        tx.vehiculo.findFirst({ where: { id_vehiculo: data.id_vehiculo, tenantId: tenant.id } }),
+        tx.cliente.findFirst({ where: { id_cliente: data.id_cliente, tenantId: tenant.id } }),
+      ]);
+      if (!vehiculoVenta || !clienteVenta) throw new Error('Vehículo o cliente inválido para esta concesionaria.');
+      if (vehiculoVenta.estado === 'VENDIDO') throw new Error('La unidad ya figura como vendida.');
 
       let prospectoId = data.prospectoId || null;
-      if (!prospectoId) {
-        const prospecto = await tx.prospecto.findFirst({
-          where: {
-            tenantId: tenant.id,
-            id_cliente: data.id_cliente,
-            id_vehiculo_interes: data.id_vehiculo,
-            estado: { notIn: ['PERDIDO', 'GANADO'] },
-          },
+      if (prospectoId) {
+        const p = await tx.prospecto.findFirst({ where: { id_prospecto: prospectoId, tenantId: tenant.id } });
+        if (!p) throw new Error('El prospecto indicado no pertenece a esta concesionaria.');
+      } else {
+        const p = await tx.prospecto.findFirst({
+          where: { tenantId: tenant.id, id_cliente: data.id_cliente, id_vehiculo_interes: data.id_vehiculo, estado: { notIn: ['PERDIDO', 'GANADO'] } },
           orderBy: { updatedAt: 'desc' },
         });
-        prospectoId = prospecto?.id_prospecto || null;
+        prospectoId = p?.id_prospecto || null;
       }
 
       let cotizacionId = data.cotizacionId || null;
-      if (!cotizacionId && prospectoId) {
-        const cotizacion = await tx.cotizacion.findFirst({
-          where: {
-            tenantId: tenant.id,
-            prospectoId,
-            id_vehiculo: data.id_vehiculo,
-            estado: { in: ['ENVIADA', 'ACEPTADA'] },
-          },
-          orderBy: { createdAt: 'desc' },
-        });
-        cotizacionId = cotizacion?.id_cotizacion || null;
+      if (cotizacionId) {
+        const q = await tx.cotizacion.findFirst({ where: { id_cotizacion: cotizacionId, tenantId: tenant.id, id_vehiculo: data.id_vehiculo } });
+        if (!q) throw new Error('La cotización indicada no es válida para esta unidad.');
+        if (prospectoId && q.prospectoId && q.prospectoId !== prospectoId) throw new Error('La cotización no pertenece al prospecto indicado.');
+      } else if (prospectoId) {
+        const q = await tx.cotizacion.findFirst({ where: { tenantId: tenant.id, prospectoId, id_vehiculo: data.id_vehiculo, estado: { in: ['ENVIADA', 'ACEPTADA'] } }, orderBy: { createdAt: 'desc' } });
+        cotizacionId = q?.id_cotizacion || null;
       }
-
-      const ventasCount = await tx.venta.count({ where: { tenantId: tenant.id } });
-      const currentYear = new Date().getFullYear();
-      const numeroBoleto = `BOL-${currentYear}-${String(ventasCount + 1).padStart(5, '0')}`;
 
       let idVehiculoPermuta: number | null = null;
       let valorTomaPermuta = 0;
-
-      if (data.permuta && data.permuta.valor_toma_usd > 0) {
-        valorTomaPermuta = data.permuta.valor_toma_usd;
-        const autoPermutado = await tx.vehiculo.create({
+      if (data.permuta && Number(data.permuta.valor_toma_usd) > 0) {
+        valorTomaPermuta = Number(data.permuta.valor_toma_usd);
+        if (!data.permuta.marca?.trim() || !data.permuta.modelo?.trim() || !Number.isFinite(Number(data.permuta.anio))) throw new Error('La permuta requiere marca, modelo y año válidos.');
+        const permutado = await tx.vehiculo.create({
           data: {
             tenantId: tenant.id,
-            locationId: tenant.primaryLocationId || null,
-            tipo_vehiculo: 'Auto',
-            marca: data.permuta.marca,
-            modelo: data.permuta.modelo,
-            version: data.permuta.version || null,
-            anio: data.permuta.anio,
-            km: data.permuta.km,
-            patente: data.permuta.patente ? data.permuta.patente.toUpperCase().trim() : null,
-            color: data.permuta.color || null,
-            motor: data.permuta.motor || null,
-            tipo_ingreso: 'Permuta',
-            estado: 'EN_PREPARACION',
-            precio_compra_usd: valorTomaPermuta,
-            precio_compra_ars: valorTomaPermuta * data.cotizacion_dolar,
-            costo_total_real_usd: valorTomaPermuta,
+            locationId: vehiculoVenta.locationId || tenant.primaryLocationId || null,
+            tipo_vehiculo: data.permuta.tipo_vehiculo || 'Auto',
+            marca: data.permuta.marca.trim(), modelo: data.permuta.modelo.trim(), version: data.permuta.version?.trim() || null,
+            anio: Number(data.permuta.anio), km: Math.max(0, Number(data.permuta.km || 0)),
+            patente: data.permuta.patente?.trim() ? data.permuta.patente.toUpperCase().trim() : null,
+            color: data.permuta.color?.trim() || null, motor: data.permuta.motor?.trim() || null,
+            tipo_ingreso: 'Permuta', estado: 'EN_PREPARACION',
+            precio_compra_usd: valorTomaPermuta, precio_compra_ars: valorTomaPermuta * rate, costo_total_real_usd: valorTomaPermuta,
             id_cliente: data.id_cliente,
-            notas_internas: `Ingresado como permuta en boleto ${numeroBoleto}`,
           },
         });
-        idVehiculoPermuta = autoPermutado.id_vehiculo;
+        idVehiculoPermuta = permutado.id_vehiculo;
       }
+
+      const anticipo = data.forma_pago === 'Contado' ? precioUsd : Math.max(0, Number(data.anticipo_usd || 0));
+      const saldo = data.forma_pago === 'Cuotas' ? Math.max(0, Number(data.saldo_financiado_usd || 0)) : 0;
+      if (data.forma_pago === 'Cuotas' && anticipo + valorTomaPermuta >= precioUsd) throw new Error('Anticipo y permuta no pueden cubrir o superar el total si la operación se marca financiada.');
+      if (data.forma_pago === 'Cuotas' && (!data.cuotas?.length || saldo <= 0)) throw new Error('La venta financiada requiere saldo y plan de cuotas.');
 
       const venta = await tx.venta.create({
         data: {
-          tenantId: tenant.id,
-          locationId: tenant.primaryLocationId || null,
-          id_vehiculo: data.id_vehiculo,
-          id_cliente: data.id_cliente,
-          vendedorId: user?.id || null,
-          prospectoId,
-          cotizacionId,
-          precio_final_usd: data.precio_final_usd,
-          cotizacion_dolar_venta: data.cotizacion_dolar,
-          forma_pago: data.forma_pago,
-          anticipo_usd: data.anticipo_usd || 0,
-          saldo_financiado_usd: data.saldo_financiado_usd || 0,
-          comision_vendedor_usd: data.comision_vendedor_usd || 0,
-          id_vehiculo_permuta: idVehiculoPermuta,
-          valor_toma_permuta_usd: valorTomaPermuta,
-          numero_boleto: numeroBoleto,
-          observaciones: data.observaciones || null,
+          tenantId: tenant.id, locationId: vehiculoVenta.locationId || tenant.primaryLocationId || null,
+          id_vehiculo: data.id_vehiculo, id_cliente: data.id_cliente, vendedorId: user.id,
+          prospectoId, cotizacionId, precio_final_usd: precioUsd, cotizacion_dolar_venta: rate,
+          forma_pago: data.forma_pago, anticipo_usd: anticipo, saldo_financiado_usd: saldo,
+          comision_vendedor_usd: Math.max(0, Number(data.comision_vendedor_usd || 0)),
+          id_vehiculo_permuta: idVehiculoPermuta, valor_toma_permuta_usd: valorTomaPermuta,
+          observaciones: data.observaciones?.trim() || null,
         },
       });
+      const numeroBoleto = `BOL-${new Date().getFullYear()}-${String(venta.id_venta).padStart(6, '0')}`;
+      await tx.venta.update({ where: { id_venta: venta.id_venta }, data: { numero_boleto: numeroBoleto } });
 
-      if (idVehiculoPermuta) {
-        await tx.vehiculo.update({
-          where: { id_vehiculo: idVehiculoPermuta },
-          data: { permuta_de_venta_id: venta.id_venta },
-        });
-      }
+      if (idVehiculoPermuta) await tx.vehiculo.update({ where: { id_vehiculo: idVehiculoPermuta }, data: { permuta_de_venta_id: venta.id_venta, notas_internas: `Ingresado como permuta en ${numeroBoleto}` } });
 
       if (data.forma_pago === 'Cuotas' && data.cuotas?.length) {
-        await tx.ventaCuota.createMany({
-          data: data.cuotas.map((c) => ({
-            tenantId: tenant.id,
-            id_venta: venta.id_venta,
-            numero_cuota: c.numero_cuota,
-            monto_usd: c.monto_usd,
-            fecha_vencimiento: new Date(c.fecha_vencimiento),
-            estado: 'PENDIENTE',
-          })),
-        });
+        const cuotas = data.cuotas.map((c, idx) => ({ tenantId: tenant.id, id_venta: venta.id_venta, numero_cuota: Number(c.numero_cuota || idx + 1), monto_usd: Math.max(0, Number(c.monto_usd || 0)), fecha_vencimiento: new Date(c.fecha_vencimiento), estado: 'PENDIENTE' as const }));
+        if (cuotas.some((c) => !Number.isFinite(c.monto_usd) || c.monto_usd <= 0 || Number.isNaN(c.fecha_vencimiento.getTime()))) throw new Error('El plan de cuotas contiene valores inválidos.');
+        await tx.ventaCuota.createMany({ data: cuotas });
       }
 
-      await tx.vehiculo.update({
-        where: { id_vehiculo: data.id_vehiculo },
-        data: { estado: 'VENDIDO' },
-      });
+      await tx.vehiculo.update({ where: { id_vehiculo: data.id_vehiculo }, data: { estado: 'VENDIDO' } });
+      await tx.senia.updateMany({ where: { id_vehiculo: data.id_vehiculo, tenantId: tenant.id, estado: 'ACTIVA' }, data: { estado: 'CANCELADA' } });
+      if (cotizacionId) await tx.cotizacion.update({ where: { id_cotizacion: cotizacionId }, data: { estado: 'ACEPTADA', id_cliente: data.id_cliente } });
+      if (prospectoId) await tx.prospecto.update({ where: { id_prospecto: prospectoId }, data: { estado: 'GANADO', id_cliente: data.id_cliente, id_vehiculo_interes: data.id_vehiculo, proxima_accion: null } });
+      await tx.entrega.create({ data: { tenantId: tenant.id, id_venta: venta.id_venta, estado: 'PENDIENTE', checklist: { documentacion: false, unidad_revisada: false, llaves: false, combustible: false, cliente_notificado: false } } });
 
-      await tx.senia.updateMany({
-        where: { id_vehiculo: data.id_vehiculo, tenantId: tenant.id, estado: 'ACTIVA' },
-        data: { estado: 'CANCELADA' },
-      });
-
-      if (cotizacionId) {
-        await tx.cotizacion.update({
-          where: { id_cotizacion: cotizacionId },
-          data: { estado: 'ACEPTADA', id_cliente: data.id_cliente },
-        });
-      }
-
-      if (prospectoId) {
-        await tx.prospecto.update({
-          where: { id_prospecto: prospectoId },
-          data: {
-            estado: 'GANADO',
-            id_cliente: data.id_cliente,
-            id_vehiculo_interes: data.id_vehiculo,
-            proxima_accion: null,
-          },
-        });
-      }
-
-      await tx.entrega.create({
-        data: {
-          tenantId: tenant.id,
-          id_venta: venta.id_venta,
-          estado: 'PENDIENTE',
-          checklist: {
-            documentacion: false,
-            unidad_revisada: false,
-            llaves: false,
-            combustible: false,
-            cliente_notificado: false,
-          },
-        },
-      });
-
-      return { venta, numeroBoleto, prospectoId };
+      return { id_venta: venta.id_venta, numeroBoleto, prospectoId };
     });
 
-    revalidatePath('/vehiculos');
-    revalidatePath(`/vehiculos/${data.id_vehiculo}`);
-    revalidatePath('/ventas');
-    revalidatePath('/cuotas');
-    revalidatePath('/prospectos');
+    revalidatePath('/vehiculos'); revalidatePath('/motos'); revalidatePath(`/vehiculos/${data.id_vehiculo}`); revalidatePath('/ventas'); revalidatePath('/cuotas'); revalidatePath('/caja'); revalidatePath('/prospectos');
     if (result.prospectoId) revalidatePath(`/prospectos/${result.prospectoId}`);
-
-    return {
-      success: true,
-      id_venta: result.venta.id_venta,
-      numero_boleto: result.numeroBoleto,
-    };
-  } catch (error) {
+    return { success: true, id_venta: result.id_venta, numero_boleto: result.numeroBoleto };
+  } catch (error: any) {
     console.error('Error registrando venta:', error);
-    return { success: false, error: 'Ocurrió un error al registrar la venta.' };
+    return { success: false, error: error?.message || 'Ocurrió un error al registrar la venta.' };
   }
 }
