@@ -1,9 +1,17 @@
+import { redirect } from 'next/navigation';
 import { getSuperAdminOverviewAction } from '@/actions/superadmin';
+import { getLoggedUser } from '@/lib/user-auth';
 import TenantsManagerClient from './TenantsManagerClient';
 
 export const dynamic = 'force-dynamic';
 
 export default async function SuperAdminPage() {
+  const user = await getLoggedUser();
+
+  if (!user || !user.isSuperAdmin) {
+    redirect('/login?error=superadmin_required');
+  }
+
   const data = await getSuperAdminOverviewAction();
 
   return (
