@@ -36,7 +36,7 @@ export default async function CajaPage() {
       .filter((s) => s.id_vehiculo === v.id_vehiculo && s.id_cliente === v.id_cliente && s.fecha_senia <= v.fecha_venta)
       .sort((a, b) => b.fecha_senia.getTime() - a.fecha_senia.getTime());
 
-    let seniaVenta = candidates.find((s) => s.prospectoId && v.prospectoId && s.prospectoId === v.prospectoId)
+    const seniaVenta = candidates.find((s) => s.prospectoId && v.prospectoId && s.prospectoId === v.prospectoId)
       || candidates.find((s) => s.cotizacionId && v.cotizacionId && s.cotizacionId === v.cotizacionId)
       || candidates[0]
       || null;
@@ -45,7 +45,10 @@ export default async function CajaPage() {
     const seniaUsdAtSaleRate = rate > 0 ? seniaArs / rate : 0;
     if (seniaVenta) seniasAplicadas.add(seniaVenta.id_senia);
 
-    const inicialUsd = v.forma_pago === 'Contado' ? Number(v.precio_final_usd || 0) : Number(v.anticipo_usd || 0);
+    // Una permuta es valor comercial, no efectivo. En contado sólo entra a caja el precio menos la toma.
+    const inicialUsd = v.forma_pago === 'Contado'
+      ? Math.max(0, Number(v.precio_final_usd || 0) - Number(v.valor_toma_permuta_usd || 0))
+      : Number(v.anticipo_usd || 0);
     const efectivoCierreUsd = Math.max(0, inicialUsd - seniaUsdAtSaleRate);
     if (efectivoCierreUsd > 0) transacciones.push({
       id: `VTA-${v.id_venta}`,
