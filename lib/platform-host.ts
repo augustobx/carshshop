@@ -1,15 +1,31 @@
+function normalizeHost(value: string | null | undefined): string {
+  if (!value) return '';
+  return value.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '').split(':')[0];
+}
+
 export function getPlatformHostname(baseUrl: string | undefined): string | null {
-  if (!baseUrl) return null;
+  const explicit = normalizeHost(process.env.PLATFORM_HOST);
+  if (explicit) return explicit;
+
+  if (!baseUrl) return 'onlycars.nanoapps.ar';
   try {
-    return new URL(baseUrl).hostname.trim().toLowerCase().replace(/\.$/, "") || null;
+    return normalizeHost(new URL(baseUrl).hostname) || 'onlycars.nanoapps.ar';
   } catch {
-    return null;
+    return 'onlycars.nanoapps.ar';
   }
 }
 
-export function isPlatformHostname(domain: string, baseDomain: string | undefined, baseUrl: string | undefined): boolean {
-  const cleanDomain = domain.trim().toLowerCase().replace(/\.$/, "");
-  const cleanBaseDomain = (baseDomain || "").trim().toLowerCase().replace(/\.$/, "");
+/**
+ * Compatibilidad con el helper histórico. BASE_DOMAIN ya no define la plataforma:
+ * - PLATFORM_HOST=onlycars.nanoapps.ar
+ * - TENANT_BASE_DOMAIN=nanoapps.ar
+ */
+export function isPlatformHostname(
+  domain: string,
+  _baseDomain?: string,
+  baseUrl?: string
+): boolean {
+  const cleanDomain = normalizeHost(domain);
   const platformHostname = getPlatformHostname(baseUrl);
-  return Boolean(cleanDomain && ((cleanBaseDomain && cleanDomain === cleanBaseDomain) || cleanDomain === platformHostname));
+  return Boolean(cleanDomain && platformHostname && cleanDomain === platformHostname);
 }
