@@ -3,6 +3,7 @@
 import { prisma as db } from '@/lib/prisma';
 import { getTenantContext } from '@/lib/tenant-context';
 import { requireTenantRole } from '@/lib/user-auth';
+import { normalizeSellerPwaConfig, SellerPwaConfig } from '@/lib/seller-pwa-config';
 import { revalidatePath } from 'next/cache';
 import { RolMembresia } from '@prisma/client';
 
@@ -39,6 +40,8 @@ function revalidateFinancialViews() {
   revalidatePath('/prospectos');
   revalidatePath('/consignaciones');
   revalidatePath('/documentos', 'layout');
+  revalidatePath('/pwa/dashboard');
+  revalidatePath('/pwa/cotizador');
 }
 
 export async function guardarConfiguracion(data: {
@@ -131,6 +134,27 @@ export async function guardarConfiguracion(data: {
   } catch (error: any) {
     console.error('Error guardando configuración:', error);
     return { success: false, error: 'No se pudo guardar la configuración.' };
+  }
+}
+
+export async function guardarPwaVendedorConfig(input: SellerPwaConfig) {
+  try {
+    const tenant = await getTenantContext();
+    await requireTenantRole(tenant.id, CONFIG_ROLES);
+    const config = normalizeSellerPwaConfig(input);
+
+    await db.tenantFeature.upsert({
+      where: { tenantId_featureKey: { tenantId: tenant.id, featureKey: 'seller_pwa' } },
+      update: { isEnabled: true, config },
+      create: { tenantId: tenant.id, featureKey: 'seller_pwa', isEnabled: true, config },
+    });
+
+    revalidatePath('/configuracion');
+    revalidatePath('/pwa', 'layout');
+    return { success: true, config };
+  } catch (error) {
+    console.error('Error guardando configuración PWA vendedor:', error);
+    return { success: false, error: 'No se pudo guardar la configuración de la app de vendedores.' };
   }
 }
 
