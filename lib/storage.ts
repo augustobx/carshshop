@@ -136,6 +136,12 @@ function encodeObjectPath(value: string): string {
   return value.split('/').map((part) => encodeURIComponent(part)).join('/');
 }
 
+function toFetchBody(buffer: Buffer): ArrayBuffer {
+  const bytes = new Uint8Array(buffer.length);
+  bytes.set(buffer);
+  return bytes.buffer;
+}
+
 /**
  * Cliente mínimo AWS Signature V4 para Cloudflare R2.
  * Mantiene el mismo contrato/env de OnlyFood sin sumar una dependencia pesada al runtime.
@@ -201,7 +207,8 @@ class R2StorageProvider implements StorageProvider {
     for (const [key, value] of Object.entries(headers)) if (key !== 'host') requestHeaders.set(key, value);
     requestHeaders.set('Authorization', authorization);
 
-    return fetch(url, { method, headers: requestHeaders, body: method === 'PUT' ? body : undefined });
+    const requestBody = method === 'PUT' && body ? toFetchBody(body) : undefined;
+    return fetch(url, { method, headers: requestHeaders, body: requestBody });
   }
 
   async upload(options: StorageUploadOptions): Promise<StorageUploadResult> {
