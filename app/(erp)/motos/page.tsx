@@ -2,6 +2,7 @@ import { prisma as db } from "@/lib/prisma";
 import VehiculosClient from "../vehiculos/VehiculosClient";
 import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
+import { getTenantContext } from "@/lib/tenant-context";
 
 export const dynamic = "force-dynamic";
 
@@ -9,11 +10,11 @@ export default async function MotosPage({ searchParams }: { searchParams: Promis
     const params = await searchParams;
     const tab = params.tab || 'en_preparacion';
 
-    // Buscamos el dólar actual de la configuración (para mandarlo al cliente)
-    const cfg = await db.configuracion.findUnique({ where: { clave: 'dolar_actual' } });
-    const dolarBlue = cfg ? parseFloat(cfg.valor) : 1000;
+    const tenant = await getTenantContext();
+    const dolarBlue = tenant.settings?.dolarActual || 1400;
 
     const where: any = {
+        tenantId: tenant.id,
         tipo_vehiculo: 'Moto'
     };
 
@@ -67,8 +68,8 @@ export default async function MotosPage({ searchParams }: { searchParams: Promis
     });
 
     return (
-        <Suspense fallback={<div className="flex justify-center items-center h-screen"><Loader2 className="w-10 h-10 animate-spin text-indigo-600" /></div>}>
-            <VehiculosClient vehiculos={vehiculos} currentTab={tab} currentDolar={dolarBlue} isMotos={true} />
+        <Suspense fallback={<div className="flex justify-center items-center h-screen"><Loader2 className="w-10 h-10 animate-spin text-blue-600" /></div>}>
+            <VehiculosClient vehiculos={vehiculos} currentTab={tab} currentDolar={dolarBlue} />
         </Suspense>
     );
 }

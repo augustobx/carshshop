@@ -1,27 +1,54 @@
-import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-export default withAuth(
-    function middleware(req) {
-        const token = req.nextauth.token;
-        const path = req.nextUrl.pathname;
+export function middleware(request: NextRequest) {
+  const path = request.nextUrl.pathname;
 
-        // 1. Si un VENDEDOR intenta entrar al ERP de escritorio, lo mandamos a la PWA
-        if (token?.rol === "Vendedor" && !path.startsWith("/pwa") && path !== "/login") {
-            return NextResponse.redirect(new URL("/pwa", req.url));
-        }
+  // Rutas públicas que no requieren autenticación
+  const isPublicPath =
+    path === "/login" ||
+    path.startsWith("/api/health") ||
+    path.startsWith("/api/internal/caddy/ask") ||
+    path.startsWith("/api/auth") ||
+    path.startsWith("/_next") ||
+    path.startsWith("/favicon.ico") ||
+    path.startsWith("/uploads");
 
-        // 2. Eliminamos la restricción del Admin. Ahora el Admin puede usar tanto el ERP como la PWA libremente.
-    },
-    {
-        callbacks: {
-            // Si esto devuelve true, la persona está logueada. Si devuelve false, lo patea a /login
-            authorized: ({ token }) => !!token,
-        },
+  if (isPublicPath) {
+    return NextResponse.next();
+  }
+
+  // Comprobar cookie de sesión de OnlyCars
+  const sessionToken = request.cookies.get("onlycars_user_session")?.value;
+
+  if (!sessionToken) {
+    const loginUrl = new URL("/login", request.url);
+    if (path !== "/") {
+      loginUrl.searchParams.set("redirect", path);
     }
-);
+    return NextResponse.redirect(loginUrl);
+  }
 
-// Protegemos todas las rutas excepto el login, las imágenes públicas y la API de autenticación
+  // Inyectar header con el hostname para la resolución de tenant en Server Components
+  const requestHeaders = new Headers(request.headers);
+  const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || "localhost";
+  requestHeaders.set("x-tenant-host", host);
+
+  return NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
+}
+
 export const config = {
-    matcher: ["/((?!api|_next/static|_next/image|favicon.ico|login|logo.*).*)"],
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 };

@@ -1,0 +1,83 @@
+name: onlycars
+
+services:
+  db:
+    image: mariadb:11.8
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${DB_NAME:-onlycars}
+      MARIADB_USER: ${DB_USER:-onlycars}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?Definir DB_PASSWORD en .env.docker}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Definir DB_ROOT_PASSWORD en .env.docker}
+      TZ: ${TZ:-America/Argentina/Buenos_Aires}
+    command: ["--log-bin=mysql-bin", "--binlog-format=ROW", "--expire-logs-days=7", "--server-id=1"]
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - onlycars-internal
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  database-init:
+    profiles: ["migration"]
+    image: onlycars-database-init:latest
+    build:
+      context: .
+      target: database-migrate
+    environment:
+      DATABASE_URL: mysql://${DB_USER:-onlycars}:${DB_PASSWORD}@db:3306/${DB_NAME:-onlycars}
+    depends_on:
+      db: { condition: service_healthy }
+    networks:
+      - onlycars-internal
+    restart: "no"
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  app:
+    image: onlycars-app:latest
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mysql://${DB_USER:-onlycars}:${DB_PASSWORD}@db:3306/${DB_NAME:-onlycars}
+      BASE_DOMAIN: ${BASE_DOMAIN:-onlycars.nanoapps.ar}
+      BASE_URL: ${BASE_URL:-https://onlycars.nanoapps.ar}
+      TZ: ${TZ:-America/Argentina/Buenos_Aires}
+    networks:
+      proxy:
+        aliases:
+          - onlycars-app
+      onlycars-internal:
+    depends_on:
+      db: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+volumes:
+  mariadb_data:
+    name: onlycars_mariadb_data
+
+networks:
+  proxy:
+    external: true
+  onlycars-internal:
+    name: onlycars_internal
+    internal: true

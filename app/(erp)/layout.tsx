@@ -1,56 +1,70 @@
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
-import { prisma as db } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant-context";
+import { getLoggedUser } from "@/lib/user-auth";
 
 export default async function ERPLayout({ children }: { children: React.ReactNode }) {
-    // 1. Leemos TODA la configuración global de la BD
-    const cfgDolar = await db.configuracion.findUnique({ where: { clave: 'dolar_actual' } });
-    const cfgTipo = await db.configuracion.findUnique({ where: { clave: 'tipo_dolar' } });
-    const cfgLogo = await db.configuracion.findUnique({ where: { clave: 'empresa_logo' } });
-    const cfgTema = await db.configuracion.findUnique({ where: { clave: 'empresa_tema' } });
+  let tenant;
+  try {
+    tenant = await getTenantContext();
+  } catch (err) {
+    // Si falla la resolución de tenant, creamos o usamos fallback seguro
+    tenant = {
+      id: "demo",
+      name: "OnlyCars Dealership",
+      slug: "demo",
+      settings: {
+        appName: "OnlyCars ERP",
+        logoUrl: null,
+        primaryColor: "#2563eb",
+        secondaryColor: "#0f172a",
+        dolarActual: 1400,
+        tipoDolar: "blue",
+      },
+    };
+  }
 
-    // 2. Preparamos los valores iniciales
-    const initialDolar = cfgDolar ? parseFloat(cfgDolar.valor) : 1000;
-    const initialTipo = cfgTipo ? cfgTipo.valor : 'blue';
-    const initialLogo = cfgLogo ? cfgLogo.valor : null;
-    const initialTema = cfgTema ? JSON.parse(cfgTema.valor) : null;
+  const user = await getLoggedUser();
 
-    // 3. Inyectamos los colores del tema como CSS dinámico si existe
-    let themeStyles = null;
-    if (initialTema) {
-        themeStyles = `
-      :root {
-        --color-brand: ${initialTema.primary};
-        --color-brand-hover: ${initialTema.hover};
-        --color-brand-ring: ${initialTema.ring};
-      }
-    `;
+  const initialDolar = tenant.settings?.dolarActual ?? 1400;
+  const initialTipo = tenant.settings?.tipoDolar ?? "blue";
+  const initialLogo = tenant.settings?.logoUrl ?? null;
+  const brandPrimary = tenant.settings?.primaryColor ?? "#2563eb";
+
+  const themeStyles = `
+    :root {
+      --color-brand: ${brandPrimary};
+      --color-brand-hover: ${brandPrimary}ee;
+      --color-brand-ring: ${brandPrimary}33;
     }
+  `;
 
-    return (
-        <div className="flex min-h-screen bg-slate-50 text-slate-900">
-            {/* Inyectamos variables de color corporativo */}
-            {themeStyles && <style dangerouslySetInnerHTML={{ __html: themeStyles }} />}
+  return (
+    <div className="flex min-h-screen bg-slate-50 text-slate-900 font-sans">
+      {themeStyles && <style dangerouslySetInnerHTML={{ __html: themeStyles }} />}
 
-            {/* Sidebar solo visible en el ERP */}
-            <div className="print:hidden">
-                <Sidebar />
-            </div>
+      {/* Sidebar solo visible en el ERP */}
+      <div className="print:hidden">
+        <Sidebar
+          tenantName={tenant.name}
+          tenantLogo={initialLogo}
+          isSuperAdmin={user?.isSuperAdmin || false}
+        />
+      </div>
 
-            <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-                <div className="print:hidden">
-                    <TopBar
-                        initialDolar={initialDolar}
-                        initialTipo={initialTipo}
-                        initialLogo={initialLogo}
-                        initialTema={initialTema}
-                    />
-                </div>
-
-                <div className="flex-1 overflow-y-auto">
-                    {children}
-                </div>
-            </main>
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+        <div className="print:hidden">
+          <TopBar
+            initialDolar={initialDolar}
+            initialTipo={initialTipo}
+            initialLogo={initialLogo}
+            tenantName={tenant.name}
+            isSuperAdmin={user?.isSuperAdmin || false}
+          />
         </div>
-    );
+
+        <div className="flex-1 overflow-y-auto">{children}</div>
+      </main>
+    </div>
+  );
 }

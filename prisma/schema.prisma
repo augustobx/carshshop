@@ -7,193 +7,641 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Usuario {
-  id_usuario Int        @id @default(autoincrement())
-  nombre     String
-  email      String     @unique
-  password   String
-  rol        RolUsuario
-  ventas     Venta[]
+// ==========================================
+// 1. PLANO DE PLATAFORMA SAAS (NANOLABS CORE)
+// ==========================================
+
+model Tenant {
+  id          String   @id @default(uuid())
+  slug        String   @unique // ej: "demo", "autonorte", "premiumcars"
+  name        String   // ej: "AutoNorte Concesionaria"
+  status      String   @default("ACTIVE") // ACTIVE, TRIAL, PAST_DUE, SUSPENDED, CANCELLED
+  email       String?
+  phone       String?
+  address     String?
+  city        String?
+  cuit        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  domains      TenantDomain[]
+  subscription Subscription?
+  locations    Location[]
+  memberships  TenantMembership[]
+  features     TenantFeature[]
+  settings     TenantSettings?
+  auditLogs    PlatformAuditLog[]
+  saasPayments SaaSPayment[]
+
+  // Relaciones con entidades de la concesionaria
+  vehiculos     Vehiculo[]
+  clientes      Cliente[]
+  ventas        Venta[]
+  ventaCuotas   VentaCuota[]
+  prestamos     Prestamo[]
+  prestamoCuotas PrestamoCuota[]
+  tareas        Tarea[]
+  gastos        Gasto[]
+  senias        Senia[]
+  anotaciones   Anotacion[]
+  fotos         VehiculoFoto[]
+  prospectos    Prospecto[]
+  cashSessions  CashSession[]
+  cashMovements CashMovement[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model TenantDomain {
+  id         String    @id @default(uuid())
+  tenantId   String
+  hostname   String    @unique // ej: "autonorte.onlycars.nanoapps.ar" o "autos.autonorte.com.ar"
+  isPrimary  Boolean   @default(false)
+  isCustom   Boolean   @default(false)
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model Plan {
+  id           String   @id @default(uuid())
+  code         String   @unique // "STARTER", "PRO", "ENTERPRISE"
+  name         String
+  priceMonthly Float    @default(0)
+  maxVehicles  Int      @default(50)
+  maxLocations Int      @default(1)
+  maxUsers     Int      @default(5)
+  features     Json     // Lista o flags de features disponibles
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id                 String    @id @default(uuid())
+  tenantId           String    @unique
+  planId             String
+  status             String    @default("ACTIVE") // TRIAL, ACTIVE, PAST_DUE, SUSPENDED, CANCELED
+  trialEndsAt        DateTime?
+  currentPeriodStart DateTime  @default(now())
+  currentPeriodEnd   DateTime
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  tenant   Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan     Plan          @relation(fields: [planId], references: [id])
+  payments SaaSPayment[]
+
+  @@index([status])
+}
+
+model SaaSPayment {
+  id             String    @id @default(uuid())
+  tenantId       String
+  subscriptionId String
+  amount         Float
+  currency       String    @default("USD")
+  status         String    @default("PAID") // PENDING, PAID, OVERDUE, CANCELLED
+  method         String?   // Transferencia, Tarjeta, Efectivo
+  reference      String?
+  notes          String?
+  paidAt         DateTime?
+  periodStart    DateTime
+  periodEnd      DateTime
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@index([subscriptionId])
+}
+
+model TenantFeature {
+  id         String   @id @default(uuid())
+  tenantId   String
+  featureKey String   // "crm_leads", "multi_location", "loans_module", "custom_domain", "whatsapp_api"
+  isEnabled  Boolean  @default(true)
+  config     Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, featureKey])
+  @@index([tenantId])
+}
+
+model TenantSettings {
+  id                   String   @id @default(uuid())
+  tenantId             String   @unique
+  appName              String   @default("OnlyCars")
+  logoUrl              String?
+  primaryColor         String   @default("#2563eb")
+  secondaryColor       String   @default("#0f172a")
+  dolarActual          Float    @default(1400)
+  tipoDolar            String   @default("blue")
+  tnaFinanciacion      Float    @default(48.0)
+  comisionVentaDefecto Float    @default(3.0) // % de comisión vendedor
+  telefonoContacto     String?
+  emailContacto        String?
+  whatsappLead         String?
+  cuit                 String?
+  razonSocial          String?
+  direccion            String?
+  pieImpresion         String?  @db.Text
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model PlatformAuditLog {
+  id        String   @id @default(uuid())
+  tenantId  String?
+  userId    String?
+  action    String
+  resource  String
+  details   Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([action])
+}
+
+// ==========================================
+// 2. USUARIOS, SESIONES Y ROLES
+// ==========================================
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  phone        String?
+  isSuperAdmin Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships TenantMembership[]
+  sessions    UserSession[]
+  auditLogs   PlatformAuditLog[]
+  ventas      Venta[]
   anotaciones Anotacion[]
 }
 
-model Cliente {
-  id_cliente       Int        @id @default(autoincrement())
-  nombre_completo  String
-  dni              String?    @unique
-  telefono         String?
-  email            String?
-  domicilio        String?
-  ventas           Venta[]
-  prestamos        Prestamo[]
-  senias           Senia[]
-  vehiculos   Vehiculo[]
+model TenantMembership {
+  id            String       @id @default(uuid())
+  tenantId      String
+  userId        String
+  role          RolMembresia @default(VENDEDOR)
+  commissionPct Float?       @default(0)
+  locationId    String?
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  location Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, userId])
+  @@index([userId])
+  @@index([tenantId, role])
 }
 
+model UserSession {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
+enum RolMembresia {
+  OWNER
+  MANAGER
+  VENDEDOR
+  ADMINISTRATIVO
+  TALLER
+}
+
+// ==========================================
+// 3. SUCURSALES (MULTI-LOCATION PARA GRANDES AGENCIAS)
+// ==========================================
+
+model Location {
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String   // ej: "Casa Central", "Salón Norte", "Playa de Almacenamiento"
+  code      String   // ej: "central", "norte"
+  address   String?
+  phone     String?
+  isMain    Boolean  @default(false)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehiculos   Vehiculo[]
+  ventas      Venta[]
+  gastos      Gasto[]
+  senias      Senia[]
+  cajas       CashSession[]
+  memberships TenantMembership[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isActive])
+}
+
+// ==========================================
+// 4. INVENTARIO Y STOCK AUTOMOTOR
+// ==========================================
+
 model Vehiculo {
-  id_vehiculo       Int            @id @default(autoincrement())
-  marca             String?
-  modelo            String?
-  anio              Int?
-  transmision       String?
-  traccion          String?
-  puertas           Int?
-  motor             String?
-  color             String?
-  km                Int?
-  patente           String?        @unique
-  vin               String?
-  precio_compra_usd Decimal?       @db.Decimal(10, 2)
-  precio_compra_ars Decimal?       @db.Decimal(12, 2)
-  precio_venta_usd  Decimal?       @db.Decimal(10, 2)
-  precio_venta_ars  Decimal?       @db.Decimal(12, 2)
-  estado            EstadoVehiculo @default(EN_PREPARACION)
-  fecha_ingreso     DateTime       @default(now())
-  tipo_ingreso      String?        @default("Propio") 
-  comision_consignacion_pct Decimal? @db.Decimal(5, 2)
-  tipo_vehiculo     String         @default("Auto")
-  cilindrada        String?
-  
-  ventas            Venta[]
-  tareas            Tarea[]
-  senias            Senia[]
-  fotos             VehiculoFoto[] // Faltaba esta línea
-  anotaciones       Anotacion[]    // Y faltaba esta línea
-  notas_internas  String?  @db.Text
-  id_cliente  Int?
-  cliente     Cliente?  @relation(fields: [id_cliente], references: [id_cliente])
-  
+  id_vehiculo             Int            @id @default(autoincrement())
+  tenantId                String
+  locationId              String?
+
+  marca                   String?
+  modelo                  String?
+  version                 String?
+  anio                    Int?
+  transmision             String?
+  traccion                String?
+  puertas                 Int?
+  motor                   String?
+  combustible             String?
+  cilindrada              String?
+  color                   String?
+  km                      Int?
+  patente                 String?
+  vin                     String?
+  tipo_vehiculo           String         @default("Auto") // Auto, Moto, Camioneta, Utilitario, Camion
+  tipo_ingreso            String?        @default("Propio") // Propio, Consignacion, Permuta
+
+  precio_compra_usd       Decimal?       @db.Decimal(10, 2)
+  precio_compra_ars       Decimal?       @db.Decimal(12, 2)
+  precio_venta_usd        Decimal?       @db.Decimal(10, 2)
+  precio_venta_ars        Decimal?       @db.Decimal(12, 2)
+
+  // Costeo real para grandes concesionarias
+  gastos_preparacion_usd  Decimal?       @default(0) @db.Decimal(10, 2)
+  gastos_gestoria_usd     Decimal?       @default(0) @db.Decimal(10, 2)
+  costo_total_real_usd    Decimal?       @default(0) @db.Decimal(10, 2)
+
+  estado                  EstadoVehiculo @default(EN_PREPARACION)
+  fecha_ingreso           DateTime       @default(now())
+  comision_consignacion_pct Decimal?     @db.Decimal(5, 2)
+  notas_internas          String?        @db.Text
+
+  id_cliente              Int?           // Titular anterior o consignador
+  permuta_de_venta_id     Int?           // Si fue tomado como permuta de una venta previa
+
+  tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location     Location?      @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  cliente      Cliente?       @relation(fields: [id_cliente], references: [id_cliente], onDelete: SetNull)
+  ventas       Venta[]
+  tareas       Tarea[]
+  gastos       Gasto[]
+  senias       Senia[]
+  fotos        VehiculoFoto[]
+  anotaciones  Anotacion[]
+  prospectos   Prospecto[]
+
+  @@unique([tenantId, patente])
+  @@index([tenantId, estado])
+  @@index([tenantId, locationId])
+  @@index([tenantId, marca, modelo])
 }
 
 model VehiculoFoto {
   id_foto     Int      @id @default(autoincrement())
+  tenantId    String
   id_vehiculo Int
-  url_foto    String   // Ruta de la imagen guardada
-  vehiculo    Vehiculo @relation(fields: [id_vehiculo], references: [id_vehiculo], onDelete: Cascade)
+  url_foto    String   // Ruta o URL de Cloudflare R2 / local
+  orden       Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehiculo Vehiculo @relation(fields: [id_vehiculo], references: [id_vehiculo], onDelete: Cascade)
+
+  @@index([tenantId, id_vehiculo])
 }
 
 model Anotacion {
   id_anotacion Int      @id @default(autoincrement())
+  tenantId     String
   id_vehiculo  Int
-  id_usuario   Int?
+  userId       String?
   texto        String   @db.Text
   fecha        DateTime @default(now())
-  vehiculo     Vehiculo @relation(fields: [id_vehiculo], references: [id_vehiculo], onDelete: Cascade)
-  usuario      Usuario? @relation(fields: [id_usuario], references: [id_usuario], onDelete: SetNull)
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehiculo Vehiculo @relation(fields: [id_vehiculo], references: [id_vehiculo], onDelete: Cascade)
+  usuario  User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, id_vehiculo])
 }
 
-model Configuracion {
-  clave String @id
-  valor String @db.LongText
+// ==========================================
+// 5. CLIENTES Y GESTIÓN COMERCIAL
+// ==========================================
+
+model Cliente {
+  id_cliente       Int        @id @default(autoincrement())
+  tenantId         String
+  nombre_completo  String
+  dni              String?
+  cuit_cuil        String?
+  telefono         String?
+  email            String?
+  domicilio        String?
+  localidad        String?
+  provincia        String?
+  notas            String?    @db.Text
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ventas     Venta[]
+  prestamos  Prestamo[]
+  senias     Senia[]
+  vehiculos  Vehiculo[]
+  prospectos Prospecto[]
+
+  @@unique([tenantId, dni])
+  @@index([tenantId, nombre_completo])
 }
+
+// CRM de Prospectos / Leads para grandes concesionarias
+model Prospecto {
+  id_prospecto            Int             @id @default(autoincrement())
+  tenantId                String
+  nombre                  String
+  telefono                String?
+  email                   String?
+  id_vehiculo_interes     Int?
+  id_cliente              Int?
+  vendedorId              String?
+  estado                  EstadoProspecto @default(NUEVO)
+  origen                  String?         @default("SHOWROOM") // SHOWROOM, WEB, WHATSAPP, MERCADOLIBRE
+  presupuesto_estimado_usd Decimal?        @db.Decimal(10, 2)
+  tiene_permuta           Boolean         @default(false)
+  detalle_permuta         String?
+  notas                   String?         @db.Text
+  fecha_contacto          DateTime        @default(now())
+  proxima_accion          DateTime?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehiculo_interes Vehiculo? @relation(fields: [id_vehiculo_interes], references: [id_vehiculo], onDelete: SetNull)
+  cliente          Cliente?  @relation(fields: [id_cliente], references: [id_cliente], onDelete: SetNull)
+
+  @@index([tenantId, estado])
+  @@index([tenantId, fecha_contacto])
+}
+
+enum EstadoProspecto {
+  NUEVO
+  CONTACTADO
+  VISITA_AGENDADA
+  NEGOCIACION
+  PERMUTANDO
+  GANADO
+  PERDIDO
+}
+
+// ==========================================
+// 6. VENTAS, PERMUTAS Y FINANCIACIÓN
+// ==========================================
 
 model Venta {
   id_venta               Int          @id @default(autoincrement())
+  tenantId               String
+  locationId             String?
   id_vehiculo            Int
   id_cliente             Int
-  id_vendedor_interno    Int?
+  vendedorId             String?      // Id del User que cerró la venta
+  
   precio_final_usd       Decimal      @db.Decimal(10, 2)
   forma_pago             FormaPago
   cotizacion_dolar_venta Decimal?     @db.Decimal(10, 2)
   fecha_venta            DateTime     @default(now())
-  vehiculo               Vehiculo     @relation(fields: [id_vehiculo], references: [id_vehiculo])
-  cliente                Cliente      @relation(fields: [id_cliente], references: [id_cliente])
-  vendedor               Usuario?     @relation(fields: [id_vendedor_interno], references: [id_usuario])
-  cuotas                 VentaCuota[]
+
+  // Estructura financiera y permuta para concesionarias
+  anticipo_usd           Decimal?     @default(0) @db.Decimal(10, 2)
+  saldo_financiado_usd   Decimal?     @default(0) @db.Decimal(10, 2)
+  comision_vendedor_usd  Decimal?     @default(0) @db.Decimal(10, 2)
+
+  // Datos de Permuta (Toma de auto usado como parte de pago)
+  id_vehiculo_permuta    Int?         // Id del auto tomado (ingresado a stock)
+  valor_toma_permuta_usd Decimal?     @default(0) @db.Decimal(10, 2)
+
+  // Documento formal
+  numero_boleto          String?      // ej: "BOL-2026-0042"
+  observaciones          String?      @db.Text
+
+  tenant     Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location   Location?    @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  vehiculo   Vehiculo     @relation(fields: [id_vehiculo], references: [id_vehiculo])
+  cliente    Cliente      @relation(fields: [id_cliente], references: [id_cliente])
+  vendedor   User?        @relation(fields: [vendedorId], references: [id], onDelete: SetNull)
+  cuotas     VentaCuota[]
+
+  @@index([tenantId, fecha_venta])
+  @@index([tenantId, id_vehiculo])
+  @@index([tenantId, id_cliente])
 }
 
 model VentaCuota {
   id_cuota          Int      @id @default(autoincrement())
+  tenantId          String
   id_venta          Int
   numero_cuota      Int
   monto_usd         Decimal
   fecha_vencimiento DateTime
-  estado            String   @default("PENDIENTE")
+  estado            String   @default("PENDIENTE") // PENDIENTE, PAGADA, VENCIDA
 
-  // IMPORTANTE: Los 3 campos nuevos para la cobranza inteligente
   monto_pagado_ars  Decimal?
   cotizacion_pago   Decimal?
   fecha_pago        DateTime?
+  recibo_nro        String?
 
-  venta             Venta    @relation(fields: [id_venta], references: [id_venta])
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  venta  Venta  @relation(fields: [id_venta], references: [id_venta], onDelete: Cascade)
+
+  @@index([tenantId, estado, fecha_vencimiento])
+  @@index([id_venta])
 }
 
 model Prestamo {
   id_prestamo               Int             @id @default(autoincrement())
+  tenantId                  String
   id_cliente                Int
   
-  // Nuevos campos financieros avanzados
   capital_entregado_usd     Decimal
   total_devolver_usd        Decimal
   cotizacion_dolar_prestamo Decimal
   fecha_prestamo            DateTime        @default(now())
-  estado                    String          @default("ACTIVO")
+  estado                    String          @default("ACTIVO") // ACTIVO, FINALIZADO
 
-  // Relaciones
-  cliente                   Cliente         @relation(fields: [id_cliente], references: [id_cliente])
-  cuotas                    PrestamoCuota[]
+  tenant    Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cliente   Cliente         @relation(fields: [id_cliente], references: [id_cliente])
+  cuotas    PrestamoCuota[]
+
+  @@index([tenantId, estado])
 }
 
 model PrestamoCuota {
   id_cuota          Int       @id @default(autoincrement())
+  tenantId          String
   id_prestamo       Int
   numero_cuota      Int
   monto_usd         Decimal
   fecha_vencimiento DateTime
   estado            String    @default("PENDIENTE")
   
-  // Historial de pagos inteligente
   monto_pagado_ars  Decimal?
   cotizacion_pago   Decimal?
   fecha_pago        DateTime?
+  recibo_nro        String?
 
-  prestamo          Prestamo  @relation(fields: [id_prestamo], references: [id_prestamo])
-}
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  prestamo Prestamo @relation(fields: [id_prestamo], references: [id_prestamo], onDelete: Cascade)
 
-model Tarea {
-  id_tarea     Int         @id @default(autoincrement())
-  id_vehiculo  Int
-  descripcion  String
-  estado_tarea EstadoTarea @default(PENDIENTE)
-  vehiculo     Vehiculo    @relation(fields: [id_vehiculo], references: [id_vehiculo])
-  gastos       Gasto[]
-}
-
-model Gasto {
-  id_gasto        Int      @id @default(autoincrement())
-  descripcion     String
-  monto_usd       Decimal
-  monto_ars       Decimal
-  fecha           DateTime @default(now())
-  
-  // Campos para la caja
-  categoria       String?
-  tipo_movimiento String?  @default("EGRESO")
-
-  // IMPORTANTE: El signo de interrogación (?) hace que la tarea NO sea obligatoria
-  id_tarea        Int?
-  tarea           Tarea?   @relation(fields: [id_tarea], references: [id_tarea])
+  @@index([tenantId, estado, fecha_vencimiento])
+  @@index([id_prestamo])
 }
 
 model Senia {
   id_senia     Int         @id @default(autoincrement())
+  tenantId     String
+  locationId   String?
   id_vehiculo  Int
   id_cliente   Int
   fecha_senia  DateTime    @default(now())
+  fecha_limite DateTime?
   monto_usd    Decimal     @db.Decimal(10, 2)
   monto_ars    Decimal     @db.Decimal(12, 2)
   cotizacion   Decimal     @db.Decimal(10, 2)
   estado       EstadoSenia @default(ACTIVA)
+  recibo_nro   String?
   
-  vehiculo     Vehiculo    @relation(fields: [id_vehiculo], references: [id_vehiculo], onDelete: Cascade)
-  cliente      Cliente     @relation(fields: [id_cliente], references: [id_cliente])
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  vehiculo Vehiculo  @relation(fields: [id_vehiculo], references: [id_vehiculo], onDelete: Cascade)
+  cliente  Cliente   @relation(fields: [id_cliente], references: [id_cliente])
+
+  @@index([tenantId, estado])
+  @@index([id_vehiculo])
 }
 
-enum RolUsuario {
-  Admin
-  Vendedor
-  RRHH
+// ==========================================
+// 7. TALLER, GASTOS Y CAJA POR SUCURSAL
+// ==========================================
+
+model Tarea {
+  id_tarea     Int         @id @default(autoincrement())
+  tenantId     String
+  id_vehiculo  Int
+  descripcion  String
+  estado_tarea EstadoTarea @default(PENDIENTE)
+  fecha_inicio DateTime    @default(now())
+  fecha_fin    DateTime?
+  
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vehiculo Vehiculo @relation(fields: [id_vehiculo], references: [id_vehiculo], onDelete: Cascade)
+  gastos   Gasto[]
+
+  @@index([tenantId, id_vehiculo])
 }
+
+model Gasto {
+  id_gasto        Int      @id @default(autoincrement())
+  tenantId        String
+  locationId      String?
+  id_vehiculo     Int?     // Si es gasto directo del auto (costeo real)
+  id_tarea        Int?     // Si pertenece a una tarea de taller
+  descripcion     String
+  monto_usd       Decimal  @db.Decimal(10, 2)
+  monto_ars       Decimal  @db.Decimal(12, 2)
+  fecha           DateTime @default(now())
+  categoria       String?  // Taller, Gestoria, Lavado, Combustible, Impuestos, Fijo
+  tipo_movimiento String?  @default("EGRESO") // INGRESO, EGRESO
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  vehiculo Vehiculo? @relation(fields: [id_vehiculo], references: [id_vehiculo], onDelete: SetNull)
+  tarea    Tarea?    @relation(fields: [id_tarea], references: [id_tarea], onDelete: SetNull)
+
+  @@index([tenantId, fecha])
+  @@index([tenantId, id_vehiculo])
+}
+
+model CashSession {
+  id              String    @id @default(uuid())
+  tenantId        String
+  locationId      String?
+  businessDate    DateTime  @db.Date
+  status          String    @default("OPEN") // OPEN, CLOSED
+  openingBalanceArs Float   @default(0)
+  openingBalanceUsd Float   @default(0)
+  closingBalanceArs Float?
+  closingBalanceUsd Float?
+  openedByName    String?
+  closedByName    String?
+  openedAt        DateTime  @default(now())
+  closedAt        DateTime?
+  notes           String?   @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location  Location?      @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  movements CashMovement[]
+
+  @@index([tenantId, businessDate])
+}
+
+model CashMovement {
+  id            String   @id @default(uuid())
+  tenantId      String
+  cashSessionId String
+  type          String   // INGRESO, EGRESO
+  currency      String   @default("ARS") // ARS, USD
+  amount        Float
+  category      String
+  description   String   @db.Text
+  createdByName String?
+  createdAt     DateTime @default(now())
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cashSession CashSession @relation(fields: [cashSessionId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, cashSessionId])
+}
+
+// ==========================================
+// ENUMS
+// ==========================================
 
 enum EstadoVehiculo {
   EN_PREPARACION
@@ -227,5 +675,3 @@ enum EstadoSenia {
   ACTIVA
   CANCELADA
 }
-
-

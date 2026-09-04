@@ -1,40 +1,96 @@
 'use server';
 
 import { prisma as db } from '@/lib/prisma';
-import bcrypt from 'bcryptjs';
+import { hashUserPassword } from '@/lib/user-auth';
+import { getTenantContext } from '@/lib/tenant-context';
 import { revalidatePath } from 'next/cache';
+import { RolMembresia } from '@prisma/client';
 
-export async function crearUsuario(data: { nombre: string, email: string, password_plana: string, rol: 'Admin' | 'Vendedor' | 'RRHH' }) {
-    try {
-        const existe = await db.usuario.findUnique({ where: { email: data.email } });
-        if (existe) return { success: false, error: 'El email ya está registrado.' };
+export async function crearUsuario(data: {
+  nombre: string;
+  email: string;
+  password_plana: string;
+  rol: 'OWNER' | 'MANAGER' | 'VENDEDOR' | 'ADMINISTRATIVO' | 'TALLER';
+  locationId?: string;
+  commissionPct?: number;
+}) {
+  try {
+    const tenant = await getTenantContext();
+    const cleanEmail = data.email.trim().toLowerCase();
 
-        // Encriptamos la clave antes de guardarla (NUNCA guardar claves planas)
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(data.password_plana, salt);
+    let user = await db.user.findUnique({ where: { email: cleanEmail } });
 
-        await db.usuario.create({
-            data: {
-                nombre: data.nombre,
-                email: data.email,
-                password: hashedPassword,
-                rol: data.rol
-            }
-        });
-
-        revalidatePath('/usuarios');
-        return { success: true };
-    } catch (error) {
-        return { success: false, error: 'Error al crear usuario.' };
+    if (!user) {
+      const passwordHash = await hashUserPassword(data.password_plana || 'Concesionaria2026!');
+      user = await db.user.create({
+        data: {
+          name: data.nombre.trim(),
+          email: cleanEmail,
+          passwordHash,
+          isSuperAdmin: false,
+        },
+      });
     }
+
+    // Verificar si ya tiene membresía en este tenant
+    const existingMembership = await db.tenantMembership.findUnique({
+      where: {
+        tenantId_userId: {
+          tenantId: tenant.id,
+          userId: user.id,
+        },
+      },
+    });
+
+    if (existingMembership) {
+      if (existingMembership.isActive) {
+        return { success: false, error: 'El usuario ya pertenece al equipo de esta concesionaria.' };
+      }
+      await db.tenantMembership.update({
+        where: { id: existingMembership.id },
+        data: {
+          isActive: true,
+          role: data.rol as RolMembresia,
+          locationId: data.locationId || null,
+          commissionPct: data.commissionPct || 0,
+        },
+      });
+    } else {
+      await db.tenantMembership.create({
+        data: {
+          tenantId: tenant.id,
+          userId: user.id,
+          role: data.rol as RolMembresia,
+          locationId: data.locationId || null,
+          commissionPct: data.commissionPct || 0,
+        },
+      });
+    }
+
+    revalidatePath('/usuarios');
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error creando usuario:', error);
+    return { success: false, error: 'Error al registrar usuario en la concesionaria.' };
+  }
 }
 
-export async function eliminarUsuario(id_usuario: number) {
-    try {
-        await db.usuario.delete({ where: { id_usuario } });
-        revalidatePath('/usuarios');
-        return { success: true };
-    } catch (error) {
-        return { success: false, error: 'No se puede eliminar el usuario. Es probable que tenga ventas o acciones asociadas en el sistema.' };
-    }
+export async function eliminarUsuario(membershipId: string) {
+  try {
+    const tenant = await getTenantContext();
+
+    // Desactivar membresía para preservar trazabilidad histórica
+    await db.tenantMembership.update({
+      where: { id: membershipId, tenantId: tenant.id },
+      data: { isActive: false },
+    });
+
+    revalidatePath('/usuarios');
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: 'No se pudo desactivar el acceso del usuario.',
+    };
+  }
 }

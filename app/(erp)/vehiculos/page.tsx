@@ -2,6 +2,7 @@ import { prisma as db } from "@/lib/prisma";
 import VehiculosClient from "./VehiculosClient";
 import { Suspense } from "react";
 import { Loader2 } from "lucide-react";
+import { getTenantContext } from "@/lib/tenant-context";
 
 export const dynamic = "force-dynamic";
 
@@ -9,11 +10,11 @@ export default async function VehiculosPage({ searchParams }: { searchParams: Pr
     const params = await searchParams;
     const tab = params.tab || 'en_preparacion';
 
-    // Buscamos el dólar actual de la configuración (para mandarlo al cliente)
-    const cfg = await db.configuracion.findUnique({ where: { clave: 'dolar_actual' } });
-    const dolarBlue = cfg ? parseFloat(cfg.valor) : 1000;
+    const tenant = await getTenantContext();
+    const dolarBlue = tenant.settings?.dolarActual || 1400;
 
     const where: any = {
+        tenantId: tenant.id,
         tipo_vehiculo: 'Auto'
     };
 
@@ -25,7 +26,7 @@ export default async function VehiculosPage({ searchParams }: { searchParams: Pr
             { patente: { contains: params.q } }
         ];
     } else {
-        // Filtros por columna (opcional)
+        // Filtros por columna
         if (params.marca) where.marca = { contains: params.marca };
         if (params.modelo) where.modelo = { contains: params.modelo };
         if (params.anio) where.anio = parseInt(params.anio);
@@ -57,7 +58,6 @@ export default async function VehiculosPage({ searchParams }: { searchParams: Pr
             estado: v.estado,
             tipo_ingreso: v.tipo_ingreso,
             tareas_pendientes: v._count.tareas,
-            // AQUÍ LA CORRECCIÓN: Mandamos el valor matemático CRÚDO de la base de datos, sin recalcular nada.
             compra_usd: Number(v.precio_compra_usd) || 0,
             compra_ars: Number(v.precio_compra_ars) || 0,
             venta_usd: Number(v.precio_venta_usd) || 0,
@@ -68,7 +68,7 @@ export default async function VehiculosPage({ searchParams }: { searchParams: Pr
     });
 
     return (
-        <Suspense fallback={<div className="flex justify-center items-center h-screen"><Loader2 className="w-10 h-10 animate-spin text-indigo-600" /></div>}>
+        <Suspense fallback={<div className="flex justify-center items-center h-screen"><Loader2 className="w-10 h-10 animate-spin text-blue-600" /></div>}>
             <VehiculosClient vehiculos={vehiculos} currentTab={tab} currentDolar={dolarBlue} />
         </Suspense>
     );
