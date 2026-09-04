@@ -5,6 +5,7 @@ import { useConfigStore } from '@/store/useConfigStore';
 import { syncDolarApi } from '@/actions/config';
 import { RefreshCw, DollarSign, Loader2, Building2, Settings } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function TopBar({
   initialDolar, initialTipo, initialLogo, tenantName, isSuperAdmin, canSyncDolar = false, canConfigure = false,
@@ -12,6 +13,7 @@ export default function TopBar({
   initialDolar: number; initialTipo: string; initialLogo: string | null; tenantName?: string; isSuperAdmin?: boolean;
   canSyncDolar?: boolean; canConfigure?: boolean;
 }) {
+  const router = useRouter();
   const { dolarBlue, setDolar, tipoDolar, setTipoDolar, setLogo } = useConfigStore();
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -21,7 +23,12 @@ export default function TopBar({
     if (!canSyncDolar) return;
     setIsSyncing(true);
     const res = await syncDolarApi(tipoDolar);
-    if (res.success && res.valor) setDolar(res.valor); else alert(res.error || 'Error actualizando cotización');
+    if (res.success && res.valor) {
+      setDolar(res.valor);
+      router.refresh();
+    } else {
+      alert(res.error || 'Error actualizando cotización');
+    }
     setIsSyncing(false);
   };
 
