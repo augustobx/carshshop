@@ -1,7 +1,7 @@
 import { getLoggedUser } from '@/lib/user-auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { ShieldCheck, Building2, CreditCard, Activity, LogOut, ArrowLeft, Car } from 'lucide-react';
+import { Building2, LogOut, Car } from 'lucide-react';
 import { logoutAction } from '@/actions/auth';
 
 export default async function SuperAdminLayout({ children }: { children: React.ReactNode }) {
@@ -18,7 +18,6 @@ export default async function SuperAdminLayout({ children }: { children: React.R
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      {/* Top Header Plataforma */}
       <header className="h-16 border-b border-slate-800 bg-slate-900/80 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
@@ -41,13 +40,6 @@ export default async function SuperAdminLayout({ children }: { children: React.R
               <Building2 className="w-4 h-4 text-blue-400" />
               Concesionarias
             </Link>
-            <Link
-              href="/"
-              className="px-3.5 py-2 rounded-lg text-sm font-semibold text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors flex items-center gap-2"
-            >
-              <ArrowLeft className="w-4 h-4 text-slate-400" />
-              Ir al ERP
-            </Link>
           </nav>
         </div>
 
@@ -69,7 +61,6 @@ export default async function SuperAdminLayout({ children }: { children: React.R
         </div>
       </header>
 
-      {/* Contenido Principal */}
       <main className="flex-1 p-6 max-w-7xl w-full mx-auto">
         {children}
       </main>
