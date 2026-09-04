@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { BookmarkCheck, Calculator, LayoutGrid, Search } from 'lucide-react';
+import { BookmarkCheck, Search } from 'lucide-react';
 import { useConfigStore } from '@/store/useConfigStore';
 import type { SellerPwaConfig } from '@/lib/seller-pwa-config';
+import PwaBottomNav from '../PwaBottomNav';
 
 export default function DashboardMobileClient({ vehiculos, pwaConfig }: { vehiculos: any[]; pwaConfig: SellerPwaConfig }) {
   const { dolarBlue } = useConfigStore();
@@ -32,13 +33,7 @@ export default function DashboardMobileClient({ vehiculos, pwaConfig }: { vehicu
         </div>
         <div className="relative">
           <Search className="absolute left-4 top-3.5 w-5 h-5 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Buscar marca, modelo, versión o patente..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-slate-800 text-white placeholder:text-slate-400 pl-12 pr-4 py-3.5 rounded-2xl outline-none focus:ring-2 focus:ring-[var(--color-brand,#4f46e5)] font-medium transition-all"
-          />
+          <input type="text" placeholder="Buscar marca, modelo, versión o patente..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-800 text-white placeholder:text-slate-400 pl-12 pr-4 py-3.5 rounded-2xl outline-none focus:ring-2 focus:ring-[var(--color-brand,#4f46e5)] font-medium transition-all" />
         </div>
       </header>
 
@@ -71,10 +66,7 @@ export default function DashboardMobileClient({ vehiculos, pwaConfig }: { vehicu
         ))}
       </main>
 
-      <nav className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 px-6 py-3 pb-safe flex justify-around items-center shadow-[0_-10px_20px_rgba(0,0,0,0.03)] z-50">
-        <Link href="/pwa/dashboard" className="flex flex-col items-center text-indigo-600"><LayoutGrid className="w-6 h-6 mb-1" /><span className="text-[10px] font-black uppercase">Stock</span></Link>
-        <Link href="/pwa/cotizador" className="flex flex-col items-center text-slate-400 hover:text-slate-900 transition-colors"><Calculator className="w-6 h-6 mb-1" /><span className="text-[10px] font-bold uppercase">Cotizar</span></Link>
-      </nav>
+      <PwaBottomNav active="stock" />
     </div>
   );
 }
