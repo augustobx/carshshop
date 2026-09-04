@@ -23,7 +23,9 @@ export default function PlansClient({ plans }: { plans: any[] }) {
 
 function PlanEditor({ plan }: { plan: any }) {
   const router = useRouter();
-  const featuresArray = Array.isArray(plan.features) ? plan.features.filter((item: unknown) => typeof item === 'string') : [];
+  const featuresArray: string[] = Array.isArray(plan.features)
+    ? plan.features.filter((item: unknown): item is string => typeof item === 'string')
+    : [];
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -42,7 +44,7 @@ function PlanEditor({ plan }: { plan: any }) {
       maxVehicles: Number(form.maxVehicles),
       maxLocations: Number(form.maxLocations),
       maxUsers: Number(form.maxUsers),
-      features: form.features.split(',').map((item) => item.trim()).filter(Boolean),
+      features: form.features.split(',').map((item: string) => item.trim()).filter(Boolean),
       isActive: form.isActive,
     });
     if (!result.success) setError(result.error || 'No se pudo guardar el plan.');
