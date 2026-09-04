@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Plus, Car, Bike, Wrench, Search, Tag, LayoutGrid, List, FolderOpen } from 'lucide-react';
+import { Plus, Car, Bike, Wrench, Search, Tag, LayoutGrid, List, FolderOpen, BookmarkCheck } from 'lucide-react';
 import EstadoSelect from '@/components/vehiculos/EstadoSelect';
 import DualMoney from '@/components/common/DualMoney';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -60,9 +60,15 @@ export default function VehiculosClient({ vehiculos, currentTab, currentDolar, i
     ['en_preparacion', 'En preparación'],
     ['listos', 'Listos para venta'],
     ['consignacion', 'En consignación'],
-    ['senados', 'Señados'],
+    ['reservados', 'Con reserva'],
     ['vendidos', 'Vendidos'],
   ];
+
+  const ReservationBadge = ({ v }: { v: any }) => v.reservado ? (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-black" title={v.reserva_cliente ? `Reservado por ${v.reserva_cliente}` : 'Reserva activa'}>
+      <BookmarkCheck className="w-3 h-3" /> RESERVADO
+    </span>
+  ) : null;
 
   return (
     <div className="p-6 max-w-[1600px] mx-auto space-y-6">
@@ -71,7 +77,7 @@ export default function VehiculosClient({ vehiculos, currentTab, currentDolar, i
           <h1 className="text-3xl font-black flex items-center gap-3 text-slate-900">
             <EntityIcon className="w-8 h-8 text-indigo-600" /> Inventario de {isMotos ? 'Motos' : 'Vehículos'}
           </h1>
-          <p className="text-sm text-slate-500 mt-1">Stock, estado comercial, costos y precio de venta en ARS y USD.</p>
+          <p className="text-sm text-slate-500 mt-1">Estado operativo, reserva comercial, costos y precio de venta en ARS y USD.</p>
         </div>
         <Link
           href={`/vehiculos/agregar?tipo=${isMotos ? 'Moto' : 'Auto'}&returnTo=${encodeURIComponent(routeBase)}`}
@@ -128,14 +134,15 @@ export default function VehiculosClient({ vehiculos, currentTab, currentDolar, i
           <div className="py-16 text-center text-slate-500">No hay {isMotos ? 'motos' : 'vehículos'} para los filtros actuales.</div>
         ) : view === 'lista' ? (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm whitespace-nowrap min-w-[1100px]">
+            <table className="w-full text-left text-sm whitespace-nowrap min-w-[1150px]">
               <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] tracking-wider font-black border-b">
                 <tr>
                   <th className="px-5 py-4">Unidad</th>
                   <th className="px-5 py-4">Datos</th>
                   <th className="px-5 py-4 text-right">Costo</th>
                   <th className="px-5 py-4 text-right">Venta</th>
-                  <th className="px-5 py-4">Estado</th>
+                  <th className="px-5 py-4">Estado operativo</th>
+                  <th className="px-5 py-4">Reserva</th>
                   <th className="px-5 py-4 text-center">Tareas</th>
                   <th className="px-5 py-4 text-right">Acción</th>
                 </tr>
@@ -157,6 +164,7 @@ export default function VehiculosClient({ vehiculos, currentTab, currentDolar, i
                     <td className="px-5 py-4 text-right"><DualMoney ars={v.compra_ars} usd={v.compra_usd} rate={currentDolar} compact /></td>
                     <td className="px-5 py-4 text-right"><DualMoney ars={v.venta_ars} usd={v.venta_usd} rate={currentDolar} compact primaryClassName="font-black text-emerald-700" /></td>
                     <td className="px-5 py-4"><EstadoSelect idVehiculo={v.id_vehiculo} estadoActual={v.estado} /></td>
+                    <td className="px-5 py-4"><ReservationBadge v={v} />{!v.reservado && <span className="text-xs text-slate-300">—</span>}</td>
                     <td className="px-5 py-4 text-center">
                       {v.tareas_pendientes > 0 ? <span className="bg-amber-50 border border-amber-200 text-amber-700 px-2.5 py-1 rounded-full text-xs font-black">{v.tareas_pendientes}</span> : <span className="text-slate-300">—</span>}
                     </td>
@@ -173,10 +181,10 @@ export default function VehiculosClient({ vehiculos, currentTab, currentDolar, i
             {paginated.map((v: any) => (
               <div key={v.id_vehiculo} className="border border-slate-200 rounded-2xl p-5 bg-white hover:shadow-md transition-shadow space-y-4">
                 <div>
-                  <p className="font-black text-lg text-slate-900">{v.marca} {v.modelo}</p>
+                  <div className="flex items-start justify-between gap-2"><p className="font-black text-lg text-slate-900">{v.marca} {v.modelo}</p><ReservationBadge v={v} /></div>
                   <p className="text-xs text-slate-500 mt-1">{v.anio || 'S/A'} · {Number(v.km || 0).toLocaleString('es-AR')} km · <span className="uppercase">{v.patente || 'S/P'}</span></p>
                 </div>
-                <EstadoSelect idVehiculo={v.id_vehiculo} estadoActual={v.estado} />
+                <div><p className="text-[10px] uppercase font-black text-slate-400 mb-1">Estado operativo</p><EstadoSelect idVehiculo={v.id_vehiculo} estadoActual={v.estado} /></div>
                 <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3">
                   <p className="text-[10px] uppercase font-black text-emerald-700 mb-1">Precio de venta</p>
                   <DualMoney ars={v.venta_ars} usd={v.venta_usd} rate={currentDolar} primaryClassName="text-xl font-black text-emerald-900" />
