@@ -155,14 +155,35 @@ export async function resolveTenantByHostname(hostname: string): Promise<TenantR
     const now = new Date();
     const isExpired = Boolean(
       subscription &&
-      ((subscription.status === "TRIAL" && subscription.trialEndsAt && subscription.trialEndsAt <= now) ||
+      ((subscription.status === "TRIAL" &&
+        ((subscription.trialEndsAt && subscription.trialEndsAt <= now) ||
+          (!subscription.trialEndsAt && subscription.currentPeriodEnd <= now))) ||
         (subscription.status === "ACTIVE" && subscription.currentPeriodEnd <= now))
     );
 
+    // El vencimiento se evalúa en cada request para cubrir también sesiones ya iniciadas.
+    // Además se persiste el estado para que el Control Plane refleje la suspensión sin depender del login.
+    if (isExpired && subscription) {
+      try {
+        await prisma.$transaction([
+          prisma.subscription.updateMany({
+            where: { id: subscription.id, status: { in: ["ACTIVE", "TRIAL"] } },
+            data: { status: "PAST_DUE" },
+          }),
+          prisma.tenant.updateMany({
+            where: { id: tenantData.id, status: { notIn: ["CANCELED", "CANCELLED"] } },
+            data: { status: "SUSPENDED" },
+          }),
+        ]);
+      } catch (error) {
+        console.error("[Tenant Membership Expiry Persist Error]:", error);
+      }
+    }
+
     const isSuspended =
-      ["SUSPENDED", "CANCELLED", "PAST_DUE"].includes(tenantData.status) ||
+      ["SUSPENDED", "CANCELED", "CANCELLED", "PAST_DUE"].includes(tenantData.status) ||
       !subscription ||
-      ["SUSPENDED", "CANCELED", "PAST_DUE"].includes(subscription.status) ||
+      ["SUSPENDED", "CANCELED", "CANCELLED", "PAST_DUE"].includes(subscription.status) ||
       isExpired;
 
     if (isSuspended) {
