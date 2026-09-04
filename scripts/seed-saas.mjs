@@ -131,6 +131,17 @@ async function main() {
     },
   });
 
+  // Dominio base de plataforma como dominio directo
+  await prisma.tenantDomain.upsert({
+    where: { hostname: baseDomain },
+    update: {},
+    create: {
+      tenantId: tenant.id,
+      hostname: baseDomain,
+      isPrimary: false,
+    },
+  });
+
   // Dominio localhost para desarrollo
   await prisma.tenantDomain.upsert({
     where: { hostname: 'localhost' },
