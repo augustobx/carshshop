@@ -25,7 +25,7 @@ export default async function DetalleVehiculoPage({ params }: { params: Promise<
       include: {
         cliente: true,
         location: true,
-        tareas: { include: { gastos: true }, orderBy: { id_tarea: 'desc' } },
+        tareas: { orderBy: { id_tarea: 'desc' } },
         senias: { include: { cliente: true, prospecto: true }, orderBy: { id_senia: 'desc' } },
         anotaciones: { include: { usuario: true }, orderBy: { fecha: 'desc' } },
         fotos: { orderBy: { orden: 'asc' } },
@@ -56,7 +56,16 @@ export default async function DetalleVehiculoPage({ params }: { params: Promise<
     gastos_gestoria_usd: Number(vehiculoDb.gastos_gestoria_usd || 0),
     costo_total_real_usd: Number(vehiculoDb.costo_total_real_usd || 0),
     comision_consignacion_pct: Number(vehiculoDb.comision_consignacion_pct || 0),
-    tareas: vehiculoDb.tareas.map((t) => ({ ...t, gastos: t.gastos.map((g) => ({ ...g, monto_usd: Number(g.monto_usd), monto_ars: Number(g.monto_ars) })) })),
+    tareas: vehiculoDb.tareas.map((t) => {
+      const costoArs = Number(t.costo_ars || 0);
+      const costoUsd = Number(t.costo_usd || 0);
+      return {
+        ...t,
+        costo_ars: costoArs,
+        costo_usd: costoUsd,
+        gastos: costoArs > 0 || costoUsd > 0 ? [{ id_gasto: `tarea-${t.id_tarea}`, descripcion: 'Gastos registrados en la tarea', monto_ars: costoArs, monto_usd: costoUsd }] : [],
+      };
+    }),
     senias: vehiculoDb.senias.map((s) => ({ ...s, monto_usd: Number(s.monto_usd), monto_ars: Number(s.monto_ars), cotizacion: Number(s.cotizacion) })),
     prospectos: vehiculoDb.prospectos.map((p) => ({
       ...p,
