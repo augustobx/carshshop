@@ -17,6 +17,12 @@ export default async function ERPLayout({ children }: { children: React.ReactNod
   }
 
   const currentRole = user.isSuperAdmin ? 'OWNER' : membership?.role || 'VENDEDOR';
+
+  // El vendedor opera exclusivamente desde la experiencia móvil/PWA.
+  if (!user.isSuperAdmin && currentRole === 'VENDEDOR') {
+    redirect('/pwa/dashboard');
+  }
+
   const canConfigure = user.isSuperAdmin || ['OWNER', 'MANAGER'].includes(currentRole);
   const canSyncDolar = user.isSuperAdmin || ['OWNER', 'MANAGER', 'ADMINISTRATIVO'].includes(currentRole);
   const initialDolar = tenant.settings?.dolarActual ?? 1400;
