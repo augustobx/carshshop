@@ -2,26 +2,16 @@ import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import { getTenantContext } from "@/lib/tenant-context";
 import { getLoggedUser } from "@/lib/user-auth";
+import { notFound } from "next/navigation";
 
 export default async function ERPLayout({ children }: { children: React.ReactNode }) {
   let tenant;
+
   try {
     tenant = await getTenantContext();
-  } catch (err) {
-    // Si falla la resolución de tenant, creamos o usamos fallback seguro
-    tenant = {
-      id: "demo",
-      name: "OnlyCars Dealership",
-      slug: "demo",
-      settings: {
-        appName: "OnlyCars ERP",
-        logoUrl: null,
-        primaryColor: "#2563eb",
-        secondaryColor: "#0f172a",
-        dolarActual: 1400,
-        tipoDolar: "blue",
-      },
-    };
+  } catch (error) {
+    console.error("[ERP Tenant Context Error]:", error);
+    notFound();
   }
 
   const user = await getLoggedUser();
@@ -43,7 +33,6 @@ export default async function ERPLayout({ children }: { children: React.ReactNod
     <div className="flex min-h-screen bg-slate-50 text-slate-900 font-sans">
       {themeStyles && <style dangerouslySetInnerHTML={{ __html: themeStyles }} />}
 
-      {/* Sidebar solo visible en el ERP */}
       <div className="print:hidden">
         <Sidebar
           tenantName={tenant.name}
