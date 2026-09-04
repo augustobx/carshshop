@@ -7,12 +7,7 @@ import { EstadoProspecto, RolMembresia } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 
 const PWA_ROLES = [RolMembresia.OWNER, RolMembresia.MANAGER, RolMembresia.VENDEDOR];
-const FOLLOWUP_STATES: EstadoProspecto[] = [
-  EstadoProspecto.CONTACTADO,
-  EstadoProspecto.COTIZADO,
-  EstadoProspecto.NEGOCIACION,
-  EstadoProspecto.PERDIDO,
-];
+const FOLLOWUP_STATES = new Set<string>(['CONTACTADO', 'COTIZADO', 'NEGOCIACION', 'PERDIDO']);
 
 function revalidatePwa(prospectoId?: number, vehiculoId?: number) {
   revalidatePath('/pwa/dashboard');
@@ -54,6 +49,9 @@ export async function guardarCotizacionPwa(data: {
   anticipo_usd?: number;
   cantidad_cuotas?: number;
   valor_cuota_usd?: number;
+  tiene_permuta?: boolean;
+  detalle_permuta?: string;
+  valor_permuta_usd?: number;
   observaciones?: string;
   validez_dias?: number;
   proxima_accion?: string;
@@ -65,16 +63,21 @@ export async function guardarCotizacionPwa(data: {
     const rate = Number(data.cotizacion_dolar);
     const clienteId = Number(data.id_cliente);
     const vehiculoId = Number(data.id_vehiculo);
+    const tienePermuta = Boolean(data.tiene_permuta);
+    const valorPermuta = tienePermuta ? Math.max(0, Number(data.valor_permuta_usd || 0)) : 0;
+    const detallePermuta = tienePermuta ? String(data.detalle_permuta || '').trim() || null : null;
 
     if (!Number.isFinite(precio) || precio <= 0 || !Number.isFinite(rate) || rate <= 0) {
       return { success: false, error: 'Precio y cotización del dólar deben ser mayores a cero.' };
     }
     if (!['Contado', 'Cuotas'].includes(data.forma_pago)) return { success: false, error: 'Forma de pago inválida.' };
+    if (valorPermuta >= precio) return { success: false, error: 'El valor estimado de la permuta debe ser menor al precio del vehículo.' };
+    if (tienePermuta && !detallePermuta) return { success: false, error: 'Describí brevemente el vehículo que se tomaría en permuta.' };
 
     const cuotas = data.forma_pago === 'Cuotas' ? Math.max(1, Number(data.cantidad_cuotas || 0)) : 0;
     const anticipo = data.forma_pago === 'Cuotas' ? Math.max(0, Number(data.anticipo_usd || 0)) : 0;
     if (data.forma_pago === 'Cuotas' && cuotas < 1) return { success: false, error: 'Indicá una cantidad de cuotas válida.' };
-    if (anticipo >= precio && data.forma_pago === 'Cuotas') return { success: false, error: 'El anticipo debe ser menor al precio final.' };
+    if (data.forma_pago === 'Cuotas' && anticipo + valorPermuta >= precio) return { success: false, error: 'Anticipo + permuta deben ser menores al precio final para financiar saldo.' };
 
     const [cliente, vehiculo, reserva] = await Promise.all([
       db.cliente.findFirst({ where: { id_cliente: clienteId, tenantId: tenant.id } }),
@@ -112,6 +115,17 @@ export async function guardarCotizacionPwa(data: {
       }
 
       const targetState = reserva ? EstadoProspecto.RESERVADO : EstadoProspecto.COTIZADO;
+      const prospectData = {
+        id_cliente: clienteId,
+        id_vehiculo_interes: vehiculoId,
+        estado: targetState,
+        presupuesto_estimado_usd: precio,
+        tiene_permuta: tienePermuta,
+        detalle_permuta: detallePermuta,
+        notas: data.observaciones?.trim() || null,
+        proxima_accion: nextAction || validezHasta,
+      };
+
       if (!prospecto) {
         prospecto = await tx.prospecto.create({
           data: {
@@ -119,28 +133,15 @@ export async function guardarCotizacionPwa(data: {
             nombre: cliente.nombre_completo,
             telefono: cliente.telefono,
             email: cliente.email,
-            id_cliente: clienteId,
-            id_vehiculo_interes: vehiculoId,
             vendedorId: user.id,
-            estado: targetState,
             origen: 'PWA_VENDEDOR',
-            presupuesto_estimado_usd: precio,
-            notas: data.observaciones?.trim() || null,
-            proxima_accion: nextAction || validezHasta,
+            ...prospectData,
           },
         });
       } else {
         prospecto = await tx.prospecto.update({
           where: { id_prospecto: prospecto.id_prospecto },
-          data: {
-            id_cliente: clienteId,
-            id_vehiculo_interes: vehiculoId,
-            vendedorId: prospecto.vendedorId || user.id,
-            estado: targetState,
-            presupuesto_estimado_usd: precio,
-            notas: data.observaciones?.trim() || prospecto.notas,
-            proxima_accion: nextAction || validezHasta,
-          },
+          data: { ...prospectData, vendedorId: prospecto.vendedorId || user.id },
         });
       }
 
@@ -149,7 +150,7 @@ export async function guardarCotizacionPwa(data: {
         data: { estado: 'VENCIDA' },
       });
 
-      const saldo = data.forma_pago === 'Cuotas' ? Math.max(0, precio - anticipo) : 0;
+      const saldo = data.forma_pago === 'Cuotas' ? Math.max(0, precio - anticipo - valorPermuta) : 0;
       const quote = await tx.cotizacion.create({
         data: {
           tenantId: tenant.id,
@@ -165,6 +166,9 @@ export async function guardarCotizacionPwa(data: {
           saldo_financiado_usd: saldo,
           cantidad_cuotas: data.forma_pago === 'Cuotas' ? cuotas : null,
           valor_cuota_usd: data.forma_pago === 'Cuotas' ? Math.max(0, Number(data.valor_cuota_usd || 0)) || null : null,
+          tiene_permuta: tienePermuta,
+          detalle_permuta: detallePermuta,
+          valor_permuta_usd: valorPermuta,
           validez_hasta: validezHasta,
           observaciones: data.observaciones?.trim() || null,
         },
@@ -185,7 +189,7 @@ export async function actualizarSeguimientoPwa(data: {
   prospectoId: number;
   proxima_accion?: string;
   notas?: string;
-  estado?: EstadoProspecto;
+  estado?: string;
 }) {
   try {
     const tenant = await getTenantContext();
@@ -197,9 +201,9 @@ export async function actualizarSeguimientoPwa(data: {
     const nextAction = data.proxima_accion ? new Date(data.proxima_accion) : null;
     if (nextAction && Number.isNaN(nextAction.getTime())) return { success: false, error: 'Fecha de seguimiento inválida.' };
 
-    let estado = data.estado;
-    if (estado && !FOLLOWUP_STATES.includes(estado)) return { success: false, error: 'Estado no permitido desde la PWA.' };
-    if (estado === EstadoProspecto.PERDIDO) {
+    const estadoRaw = data.estado ? String(data.estado).toUpperCase() : undefined;
+    if (estadoRaw && !FOLLOWUP_STATES.has(estadoRaw)) return { success: false, error: 'Estado no permitido desde la PWA.' };
+    if (estadoRaw === 'PERDIDO') {
       const reserva = await db.senia.findFirst({ where: { tenantId: tenant.id, prospectoId: prospecto.id_prospecto, estado: 'ACTIVA' } });
       if (reserva) return { success: false, error: 'Cancelá primero la reserva activa antes de marcar la oportunidad como perdida.' };
     }
@@ -207,7 +211,7 @@ export async function actualizarSeguimientoPwa(data: {
     await db.prospecto.update({
       where: { id_prospecto: prospecto.id_prospecto },
       data: {
-        estado: estado || undefined,
+        estado: estadoRaw ? estadoRaw as EstadoProspecto : undefined,
         proxima_accion: data.proxima_accion !== undefined ? nextAction : undefined,
         notas: data.notas !== undefined ? data.notas.trim() || null : undefined,
       },
