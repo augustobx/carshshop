@@ -14,7 +14,7 @@ export async function guardarSenia(data: {
 }) {
   try {
     const tenant = await getTenantContext();
-    await requireTenantRole(tenant.id, RESERVA_ROLES);
+    const { user } = await requireTenantRole(tenant.id, RESERVA_ROLES);
     const ars = Number(data.monto_ars), usd = Number(data.monto_usd), rate = Number(data.cotizacion);
     if (ars <= 0 || usd <= 0 || rate <= 0) return { success: false, error: 'Monto ARS, USD y cotización deben ser mayores a cero.' };
 
@@ -31,20 +31,45 @@ export async function guardarSenia(data: {
     const fecha = new Date(data.fecha_senia); const limite = data.fecha_limite ? new Date(data.fecha_limite) : null;
     if (Number.isNaN(fecha.getTime()) || (limite && Number.isNaN(limite.getTime()))) return { success: false, error: 'Fecha de reserva inválida.' };
 
+    const precioSnapshotUsd = Number(vehiculo.precio_venta_usd || 0) || (rate > 0 ? Number(vehiculo.precio_venta_ars || 0) / rate : 0);
+    if (!data.cotizacionId && precioSnapshotUsd <= 0) return { success: false, error: 'Definí el precio de venta de la unidad antes de reservarla.' };
+
     const result = await db.$transaction(async (tx) => {
-      const senia = await tx.senia.create({ data: { tenantId: tenant.id, locationId: data.locationId || vehiculo.locationId || tenant.primaryLocationId || null, id_vehiculo: data.id_vehiculo, id_cliente: data.id_cliente, prospectoId: data.prospectoId || null, cotizacionId: data.cotizacionId || null, monto_ars: ars, monto_usd: usd, cotizacion: rate, fecha_senia: fecha, fecha_limite: limite, estado: 'ACTIVA' } });
+      let quoteId = data.cotizacionId || null;
+
+      // Toda reserva debe conservar el precio total y el TC del momento. Si no viene de una
+      // cotización previa, creamos un snapshot automático para poder compararlo en el futuro.
+      if (!quoteId) {
+        const snapshot = await tx.cotizacion.create({
+          data: {
+            tenantId: tenant.id,
+            prospectoId: data.prospectoId || null,
+            id_cliente: data.id_cliente,
+            id_vehiculo: data.id_vehiculo,
+            vendedorId: user.id,
+            estado: 'ACEPTADA',
+            precio_final_usd: precioSnapshotUsd,
+            cotizacion_dolar: rate,
+            forma_pago: 'Contado',
+            observaciones: 'Cotización histórica creada automáticamente al registrar la reserva.',
+          },
+        });
+        quoteId = snapshot.id_cotizacion;
+      }
+
+      const senia = await tx.senia.create({ data: { tenantId: tenant.id, locationId: data.locationId || vehiculo.locationId || tenant.primaryLocationId || null, id_vehiculo: data.id_vehiculo, id_cliente: data.id_cliente, prospectoId: data.prospectoId || null, cotizacionId: quoteId, monto_ars: ars, monto_usd: usd, cotizacion: rate, fecha_senia: fecha, fecha_limite: limite, estado: 'ACTIVA' } });
       const reciboNro = `RES-${new Date().getFullYear()}-${String(senia.id_senia).padStart(6, '0')}`;
       await tx.senia.update({ where: { id_senia: senia.id_senia }, data: { recibo_nro: reciboNro } });
 
       // La reserva es un estado comercial independiente. No modifica el estado operativo del inventario.
       if (data.prospectoId) await tx.prospecto.updateMany({ where: { id_prospecto: data.prospectoId, tenantId: tenant.id }, data: { estado: 'RESERVADO', id_cliente: data.id_cliente } });
-      if (data.cotizacionId) await tx.cotizacion.updateMany({ where: { id_cotizacion: data.cotizacionId, tenantId: tenant.id }, data: { estado: 'ACEPTADA', id_cliente: data.id_cliente } });
-      return reciboNro;
+      if (quoteId) await tx.cotizacion.updateMany({ where: { id_cotizacion: quoteId, tenantId: tenant.id }, data: { estado: 'ACEPTADA', id_cliente: data.id_cliente } });
+      return { reciboNro, quoteId };
     });
 
-    revalidatePath(`/vehiculos/${data.id_vehiculo}`); revalidatePath('/vehiculos'); revalidatePath('/motos'); revalidatePath('/prospectos'); revalidatePath('/ventas/nueva');
+    revalidatePath(`/vehiculos/${data.id_vehiculo}`); revalidatePath('/vehiculos'); revalidatePath('/motos'); revalidatePath('/prospectos'); revalidatePath('/ventas/nueva'); revalidatePath('/pwa/dashboard'); revalidatePath('/pwa/cotizador');
     if (data.prospectoId) revalidatePath(`/prospectos/${data.prospectoId}`);
-    return { success: true, recibo_nro: result };
+    return { success: true, recibo_nro: result.reciboNro, cotizacionId: result.quoteId };
   } catch (error) { console.error('Error guardando seña:', error); return { success: false, error: 'Ocurrió un error al guardar la seña.' }; }
 }
 
@@ -58,13 +83,11 @@ export async function cancelarSenia(id_senia: number, id_vehiculo: number) {
 
     await db.$transaction(async (tx) => {
       await tx.senia.update({ where: { id_senia: senia.id_senia }, data: { estado: 'CANCELADA' } });
-
-      // Cancelar una reserva tampoco altera el estado operativo de la unidad.
       if (senia.cotizacionId) await tx.cotizacion.updateMany({ where: { id_cotizacion: senia.cotizacionId, tenantId: tenant.id }, data: { estado: 'ENVIADA' } });
       if (senia.prospectoId) await tx.prospecto.updateMany({ where: { id_prospecto: senia.prospectoId, tenantId: tenant.id }, data: { estado: senia.cotizacionId ? 'COTIZADO' : 'NEGOCIACION' } });
     });
 
-    revalidatePath(`/vehiculos/${id_vehiculo}`); revalidatePath('/vehiculos'); revalidatePath('/motos'); revalidatePath('/prospectos'); revalidatePath('/ventas/nueva');
+    revalidatePath(`/vehiculos/${id_vehiculo}`); revalidatePath('/vehiculos'); revalidatePath('/motos'); revalidatePath('/prospectos'); revalidatePath('/ventas/nueva'); revalidatePath('/pwa/dashboard'); revalidatePath('/pwa/cotizador');
     if (senia.prospectoId) revalidatePath(`/prospectos/${senia.prospectoId}`);
     return { success: true };
   } catch (error) { console.error('Error cancelando seña:', error); return { success: false, error: 'Ocurrió un error al cancelar la seña.' }; }
