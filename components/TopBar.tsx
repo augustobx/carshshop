@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useConfigStore } from '@/store/useConfigStore';
 import { syncDolarApi } from '@/actions/config';
-import { RefreshCw, DollarSign, Loader2, Building2, Settings } from 'lucide-react';
+import { RefreshCw, DollarSign, Loader2, Building2, Settings, BookOpen } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import ModuleHelpButton from '@/components/ModuleHelpButton';
 
 export default function TopBar({
   initialDolar, initialTipo, initialLogo, tenantName, isSuperAdmin, canSyncDolar = false, canConfigure = false,
@@ -40,6 +41,8 @@ export default function TopBar({
 
       <div className="flex items-center gap-2">
         <div className="hidden sm:flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5"><DollarSign className="w-4 h-4 text-emerald-600 mr-2" />{canConfigure ? <Link href="/configuracion" className="flex items-baseline gap-2">{rateContent}</Link> : <div className="flex items-baseline gap-2">{rateContent}</div>}{canSyncDolar && <button onClick={handleSync} disabled={isSyncing} title="Actualizar cotización" className="ml-2 p-1.5 rounded-lg text-slate-400 hover:bg-white hover:text-emerald-600 disabled:opacity-50">{isSyncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}</button>}</div>
+        <Link href="/manual" title="Manual de usuario" className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700"><BookOpen className="w-4 h-4" /></Link>
+        <ModuleHelpButton />
         {canConfigure && <Link href="/configuracion" title="Configuración" className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700"><Settings className="w-4 h-4" /></Link>}
       </div>
     </header>
