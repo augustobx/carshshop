@@ -18,7 +18,7 @@ export default async function PwaOperacionesPage() {
       vehiculo_interes: { select: { id_vehiculo: true, marca: true, modelo: true, version: true, patente: true, anio: true } },
       cotizaciones: { orderBy: { createdAt: 'desc' }, take: 1 },
       senias: { where: { estado: 'ACTIVA' }, orderBy: { fecha_senia: 'desc' }, take: 1 },
-      ventas: { orderBy: { fecha_venta: 'desc' }, take: 1 },
+      ventas: { include: { entrega: true }, orderBy: { fecha_venta: 'desc' }, take: 1 },
     },
     orderBy: [{ proxima_accion: 'asc' }, { updatedAt: 'desc' }],
     take: 300,
@@ -28,9 +28,12 @@ export default async function PwaOperacionesPage() {
     const q = p.cotizaciones[0];
     const s = p.senias[0];
     const v = p.ventas[0];
+    const delivery = v?.entrega || null;
+    const cicloCerrado = p.estado === 'PERDIDO' || Boolean(v && delivery?.estado === 'ENTREGADA');
     return {
       id_prospecto: p.id_prospecto,
       estado: p.estado,
+      ciclo_cerrado: cicloCerrado,
       nombre: p.cliente?.nombre_completo || p.nombre,
       telefono: p.cliente?.telefono || p.telefono,
       proxima_accion: p.proxima_accion?.toISOString() || null,
@@ -47,7 +50,13 @@ export default async function PwaOperacionesPage() {
         validez: q.validez_hasta?.toISOString() || null,
       } : null,
       reserva: s ? { id: s.id_senia, ars: Number(s.monto_ars || 0), usd: Number(s.monto_usd || 0), fecha: s.fecha_senia.toISOString() } : null,
-      venta: v ? { id: v.id_venta, boleto: v.numero_boleto, fecha: v.fecha_venta.toISOString() } : null,
+      venta: v ? {
+        id: v.id_venta,
+        boleto: v.numero_boleto,
+        fecha: v.fecha_venta.toISOString(),
+        entrega_estado: delivery?.estado || 'PENDIENTE',
+        entrega_programada: delivery?.fecha_programada?.toISOString() || null,
+      } : null,
     };
   });
 
