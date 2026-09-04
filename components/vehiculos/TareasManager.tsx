@@ -3,13 +3,11 @@
 import { useState } from 'react';
 import { CheckCircle2, Circle, Loader2, Plus } from 'lucide-react';
 import { agregarTarea, cambiarEstadoTarea, agregarGasto } from '@/actions/tareas';
-import { useConfigStore } from '@/store/useConfigStore';
 import DualCurrencyInput from '@/components/common/DualCurrencyInput';
 import DualMoney from '@/components/common/DualMoney';
 
-export default function TareasManager({ tareas, idVehiculo }: { tareas: any[]; idVehiculo: number }) {
-  const { dolarBlue } = useConfigStore();
-  const rate = Number(dolarBlue || 1400);
+export default function TareasManager({ tareas, idVehiculo, dolarActual }: { tareas: any[]; idVehiculo: number; dolarActual: number }) {
+  const rate = Number(dolarActual || 1400);
   const [nuevaTarea, setNuevaTarea] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [gastoActivo, setGastoActivo] = useState<number | null>(null);
