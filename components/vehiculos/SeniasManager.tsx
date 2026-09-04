@@ -1,178 +1,59 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { guardarSenia, cancelarSenia } from '@/actions/senias';
-import { Loader2, Save, Ban, DollarSign, Banknote, History, ShoppingCart, Printer } from 'lucide-react';
-import { useConfigStore } from '@/store/useConfigStore';
+import { Loader2, Save, Ban, History, ShoppingCart, Printer } from 'lucide-react';
+import SearchCombobox from '@/components/common/SearchCombobox';
+import DualCurrencyInput from '@/components/common/DualCurrencyInput';
+import DualMoney from '@/components/common/DualMoney';
 
-export default function SeniasManager({ vehiculo, clientes }: { vehiculo: any, clientes: any[] }) {
-    const { dolarBlue } = useConfigStore();
-    const [isSubmitting, setIsSubmitting] = useState(false);
+export default function SeniasManager({ vehiculo, clientes, dolarActual }: { vehiculo: any; clientes: any[]; dolarActual: number }) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [idCliente, setIdCliente] = useState('');
+  const [fechaSenia, setFechaSenia] = useState(new Date().toISOString().slice(0, 10));
+  const [monto, setMonto] = useState({ ars: '', usd: '' });
 
-    const [idCliente, setIdCliente] = useState('');
-    const [fechaSenia, setFechaSenia] = useState(new Date().toISOString().split('T')[0]);
-    const [montoArs, setMontoArs] = useState('');
-    const [montoUsd, setMontoUsd] = useState('');
+  const seniasHistorial = vehiculo.senias || [];
+  const seniaActiva = seniasHistorial.find((s: any) => s.estado === 'ACTIVA');
+  const clientOptions = useMemo(() => (clientes || []).map((c: any) => ({
+    value: String(c.id_cliente),
+    label: c.nombre_completo,
+    description: `DNI ${c.dni || 'S/N'}${c.telefono ? ` · ${c.telefono}` : ''}`,
+    searchText: `${c.nombre_completo} ${c.dni || ''} ${c.cuit_cuil || ''} ${c.telefono || ''}`,
+  })), [clientes]);
 
-    const seniasHistorial = vehiculo.senias || [];
-    const seniaActiva = seniasHistorial.find((s: any) => s.estado === 'ACTIVA');
+  const handleGuardarSenia = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!idCliente || Number(monto.usd || 0) <= 0) return alert('Seleccioná cliente y monto de la reserva.');
+    setIsSubmitting(true);
+    const res = await guardarSenia({
+      id_vehiculo: vehiculo.id_vehiculo,
+      id_cliente: Number(idCliente),
+      monto_ars: Number(monto.ars || 0),
+      monto_usd: Number(monto.usd || 0),
+      cotizacion: dolarActual,
+      fecha_senia: fechaSenia,
+    });
+    setIsSubmitting(false);
+    if (!res.success) return alert(res.error || 'No se pudo registrar la reserva.');
+    setMonto({ ars: '', usd: '' });
+    setIdCliente('');
+  };
 
-    const handleCurrencyChange = (from: 'ars' | 'usd', value: string) => {
-        const numValue = parseFloat(value) || 0;
-        if (from === 'ars') {
-            setMontoArs(value);
-            setMontoUsd((numValue / dolarBlue).toFixed(2));
-        } else {
-            setMontoUsd(value);
-            setMontoArs((numValue * dolarBlue).toFixed(0));
-        }
-    };
+  const handleCancelarSenia = async (idSenia: number) => {
+    if (!confirm('¿Cancelar esta reserva y liberar el vehículo?')) return;
+    const res = await cancelarSenia(idSenia, vehiculo.id_vehiculo);
+    if (!res.success) alert(res.error || 'No se pudo cancelar la reserva.');
+  };
 
-    const handleGuardarSenia = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!idCliente || !montoUsd) return;
-        setIsSubmitting(true);
-        await guardarSenia({
-            id_vehiculo: vehiculo.id_vehiculo,
-            id_cliente: parseInt(idCliente),
-            monto_ars: parseFloat(montoArs) || 0,
-            monto_usd: parseFloat(montoUsd) || 0,
-            cotizacion: dolarBlue,
-            fecha_senia: fechaSenia
-        });
-        setMontoArs(''); setMontoUsd(''); setIdCliente('');
-        setIsSubmitting(false);
-    };
+  return (
+    <div className="space-y-6">
+      {seniaActiva && <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 space-y-4"><div className="flex justify-between gap-3"><div><p className="text-xs font-black uppercase text-amber-700">Reserva activa</p><p className="text-lg font-black text-amber-950 mt-1">{seniaActiva.cliente?.nombre_completo}</p></div><span className="h-fit bg-amber-200 text-amber-800 text-[10px] font-black px-3 py-1 rounded-full">ACTIVA</span></div><div className="grid grid-cols-1 sm:grid-cols-3 gap-3"><div><p className="text-[10px] uppercase font-black text-amber-700/70">Fecha</p><p className="font-bold text-amber-950">{new Date(seniaActiva.fecha_senia).toLocaleDateString('es-AR')}</p></div><div><p className="text-[10px] uppercase font-black text-amber-700/70">Monto</p><DualMoney ars={seniaActiva.monto_ars} usd={seniaActiva.monto_usd} rate={seniaActiva.cotizacion || dolarActual} primaryClassName="font-black text-amber-950" secondaryClassName="text-xs text-amber-700" /></div><div><p className="text-[10px] uppercase font-black text-amber-700/70">Cotización usada</p><p className="font-bold text-amber-950">$ {Number(seniaActiva.cotizacion || 0).toLocaleString('es-AR')} / USD</p></div></div><div className="grid grid-cols-1 md:grid-cols-3 gap-2 pt-3 border-t border-amber-200"><Link href={`/documentos/recibo/${seniaActiva.id_senia}`} target="_blank" className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl text-sm font-black flex items-center justify-center gap-2"><Printer className="w-4 h-4" /> Recibo</Link><Link href={`/ventas/nueva?v=${vehiculo.id_vehiculo}&c=${seniaActiva.id_cliente}`} className="bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-sm font-black flex items-center justify-center gap-2"><ShoppingCart className="w-4 h-4" /> Pasar a venta</Link><button onClick={() => handleCancelarSenia(seniaActiva.id_senia)} className="bg-white border border-red-200 text-red-600 px-4 py-2.5 rounded-xl text-sm font-black flex items-center justify-center gap-2"><Ban className="w-4 h-4" /> Cancelar</button></div></div>}
 
-    const handleCancelarSenia = async (idSenia: number) => {
-        if (!confirm('¿Seguro que deseas cancelar esta seña y liberar el vehículo?')) return;
-        await cancelarSenia(idSenia, vehiculo.id_vehiculo);
-    };
+      {vehiculo.estado !== 'VENDIDO' && !seniaActiva && <form onSubmit={handleGuardarSenia} className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4"><div><h3 className="font-black text-slate-900">Registrar reserva / seña</h3><p className="text-xs text-slate-500 mt-1">Buscá el cliente y cargá el importe en cualquiera de las dos monedas.</p></div><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><SearchCombobox label="Cliente" required value={idCliente} onChange={setIdCliente} options={clientOptions} placeholder="Buscar por nombre, DNI o teléfono..." /><label><span className="text-xs font-black text-slate-600 uppercase tracking-wider">Fecha *</span><input type="date" value={fechaSenia} onChange={(e) => setFechaSenia(e.target.value)} required className="mt-1.5 w-full p-2.5 border border-slate-300 rounded-xl text-sm" /></label></div><DualCurrencyInput label="Monto de la reserva" required ars={monto.ars} usd={monto.usd} rate={dolarActual} onChange={setMonto} /><button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-black flex justify-center items-center gap-2 disabled:opacity-50">{isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} Guardar reserva</button></form>}
 
-    return (
-        <div className="max-w-5xl mx-auto space-y-8">
-            {seniaActiva && (
-                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 shadow-sm">
-                    <div className="flex justify-between items-start mb-4">
-                        <h3 className="text-lg font-black text-amber-900 uppercase tracking-tight">Vehículo Señado</h3>
-                        <span className="bg-amber-200 text-amber-800 text-xs font-bold px-3 py-1 rounded-full">Activa</span>
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
-                        <div>
-                            <p className="text-xs font-bold text-amber-700/70 uppercase">Cliente</p>
-                            <p className="text-amber-950 font-bold">{seniaActiva.cliente?.nombre_completo}</p>
-                        </div>
-                        <div>
-                            <p className="text-xs font-bold text-amber-700/70 uppercase">Fecha</p>
-                            <p className="text-amber-950 font-bold">{new Date(seniaActiva.fecha_senia).toLocaleDateString('es-AR')}</p>
-                        </div>
-                        <div>
-                            <p className="text-xs font-bold text-amber-700/70 uppercase">Monto Entregado</p>
-                            <p className="text-emerald-700 font-black">U$S {Number(seniaActiva.monto_usd).toLocaleString()}</p>
-                            <p className="text-xs font-medium text-amber-800">$ {Number(seniaActiva.monto_ars).toLocaleString()} ARS</p>
-                        </div>
-                        <div>
-                            <p className="text-xs font-bold text-amber-700/70 uppercase">Cotización Tomada</p>
-                            <p className="text-amber-950 font-mono">$ {Number(seniaActiva.cotizacion).toLocaleString()}</p>
-                        </div>
-                    </div>
-
-                    {/* BOTONES DE ACCIÓN (RECIBO OFICIAL Y VENTA DIRECTA) */}
-                    <div className="flex flex-col md:flex-row gap-3 pt-4 border-t border-amber-200/50">
-                        <Link
-                            href={`/documentos/recibo/${seniaActiva.id_senia}`}
-                            target="_blank"
-                            className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors flex-1 shadow-md shadow-indigo-600/20"
-                        >
-                            <Printer className="w-5 h-5" /> Imprimir Recibo Oficial
-                        </Link>
-                        <Link
-                            href={`/ventas/nueva?v=${vehiculo.id_vehiculo}&c=${seniaActiva.id_cliente}`}
-                            className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors flex-1 shadow-md shadow-emerald-600/20"
-                        >
-                            <ShoppingCart className="w-5 h-5" /> Facturar Venta Directo
-                        </Link>
-                        <button onClick={() => handleCancelarSenia(seniaActiva.id_senia)} className="bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors flex-1 shadow-sm">
-                            <Ban className="w-5 h-5" /> Cancelar Seña
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {vehiculo.estado !== 'VENDIDO' && (
-                <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-                    <h3 className="text-lg font-bold text-slate-800 mb-5 border-b pb-3">Registrar Nueva Seña</h3>
-                    <form onSubmit={handleGuardarSenia} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 items-end">
-                        <div className="space-y-1">
-                            <label className="text-xs font-bold text-slate-500 uppercase">Cliente *</label>
-                            <select value={idCliente} onChange={(e) => setIdCliente(e.target.value)} required className="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
-                                <option value="">Seleccionar...</option>
-                                {clientes?.map(c => <option key={c.id_cliente} value={c.id_cliente}>{c.nombre_completo}</option>)}
-                            </select>
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-xs font-bold text-slate-500 uppercase">Fecha *</label>
-                            <input type="date" value={fechaSenia} onChange={(e) => setFechaSenia(e.target.value)} required className="w-full p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500" />
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-xs font-bold text-slate-500 uppercase">Monto ARS</label>
-                            <div className="relative">
-                                <Banknote className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-                                <input type="number" step="0.01" value={montoArs} onChange={(e) => handleCurrencyChange('ars', e.target.value)} className="w-full pl-9 p-2.5 border border-slate-300 rounded-lg text-sm font-bold" placeholder="ARS" />
-                            </div>
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-xs font-bold text-slate-500 uppercase">Monto USD *</label>
-                            <div className="relative">
-                                <DollarSign className="absolute left-3 top-3 w-4 h-4 text-emerald-600" />
-                                <input type="number" step="0.01" required value={montoUsd} onChange={(e) => handleCurrencyChange('usd', e.target.value)} className="w-full pl-9 p-2.5 border border-emerald-200 bg-emerald-50 rounded-lg text-sm font-bold text-emerald-700" placeholder="USD" />
-                            </div>
-                        </div>
-                        <div className="lg:col-span-4 mt-2">
-                            <button type="submit" disabled={isSubmitting || !!seniaActiva} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-bold flex justify-center items-center gap-2 shadow-sm disabled:opacity-50">
-                                {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} Guardar Seña
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            )}
-
-            <div>
-                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><History className="w-5 h-5 text-slate-400" /> Historial de Señas</h3>
-                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-slate-50 text-slate-600 uppercase text-xs font-bold">
-                            <tr>
-                                <th className="px-4 py-3">Fecha</th>
-                                <th className="px-4 py-3">Cliente</th>
-                                <th className="px-4 py-3 text-right">USD</th>
-                                <th className="px-4 py-3 text-right">ARS</th>
-                                <th className="px-4 py-3 text-center">Estado</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 bg-white">
-                            {seniasHistorial.length === 0 ? (
-                                <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500">No hay historial de señas.</td></tr>
-                            ) : (
-                                seniasHistorial.map((s: any) => (
-                                    <tr key={s.id_senia} className="hover:bg-slate-50">
-                                        <td className="px-4 py-3">{new Date(s.fecha_senia).toLocaleDateString('es-AR')}</td>
-                                        <td className="px-4 py-3 font-medium text-slate-900">{s.cliente?.nombre_completo}</td>
-                                        <td className="px-4 py-3 text-right font-bold text-emerald-700">U$S {Number(s.monto_usd).toLocaleString()}</td>
-                                        <td className="px-4 py-3 text-right text-slate-500">$ {Number(s.monto_ars).toLocaleString()}</td>
-                                        <td className="px-4 py-3 text-center">
-                                            <span className={`px-2 py-1 rounded text-[10px] font-black uppercase ${s.estado === 'ACTIVA' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500'}`}>
-                                                {s.estado}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    );
+      <div><h3 className="font-black text-slate-900 mb-3 flex items-center gap-2"><History className="w-5 h-5 text-slate-400" /> Historial de reservas</h3><div className="border border-slate-200 rounded-xl overflow-x-auto"><table className="w-full text-sm min-w-[650px]"><thead className="bg-slate-50 text-[10px] uppercase font-black text-slate-500"><tr><th className="text-left px-4 py-3">Fecha</th><th className="text-left px-4 py-3">Cliente</th><th className="text-right px-4 py-3">Monto</th><th className="text-center px-4 py-3">Estado</th></tr></thead><tbody className="divide-y bg-white">{seniasHistorial.map((s: any) => <tr key={s.id_senia}><td className="px-4 py-3">{new Date(s.fecha_senia).toLocaleDateString('es-AR')}</td><td className="px-4 py-3 font-bold text-slate-900">{s.cliente?.nombre_completo}</td><td className="px-4 py-3 text-right"><DualMoney ars={s.monto_ars} usd={s.monto_usd} rate={s.cotizacion || dolarActual} compact primaryClassName="font-black text-slate-900" /></td><td className="px-4 py-3 text-center"><span className={`px-2 py-1 rounded text-[10px] font-black ${s.estado === 'ACTIVA' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500'}`}>{s.estado}</span></td></tr>)}{seniasHistorial.length === 0 && <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-500">Sin historial de reservas.</td></tr>}</tbody></table></div></div>
+    </div>
+  );
 }
