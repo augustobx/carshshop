@@ -2,7 +2,7 @@ import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import { getTenantContext } from "@/lib/tenant-context";
 import { getLoggedUser } from "@/lib/user-auth";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 export default async function ERPLayout({ children }: { children: React.ReactNode }) {
   let tenant;
@@ -15,7 +15,17 @@ export default async function ERPLayout({ children }: { children: React.ReactNod
   }
 
   const user = await getLoggedUser();
+  if (!user) {
+    redirect('/login');
+  }
 
+  const membership = user.memberships.find((m) => m.tenantId === tenant.id);
+  if (!user.isSuperAdmin && !membership) {
+    console.warn(`[SECURITY] User ${user.id} attempted tenant access without membership: ${tenant.id}`);
+    redirect('/login?error=tenant_access_denied');
+  }
+
+  const currentRole = user.isSuperAdmin ? 'OWNER' : membership?.role || 'VENDEDOR';
   const initialDolar = tenant.settings?.dolarActual ?? 1400;
   const initialTipo = tenant.settings?.tipoDolar ?? "blue";
   const initialLogo = tenant.settings?.logoUrl ?? null;
@@ -31,13 +41,14 @@ export default async function ERPLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen bg-slate-50 text-slate-900 font-sans">
-      {themeStyles && <style dangerouslySetInnerHTML={{ __html: themeStyles }} />}
+      <style dangerouslySetInnerHTML={{ __html: themeStyles }} />
 
       <div className="print:hidden">
         <Sidebar
           tenantName={tenant.name}
           tenantLogo={initialLogo}
-          isSuperAdmin={user?.isSuperAdmin || false}
+          isSuperAdmin={user.isSuperAdmin}
+          currentRole={currentRole}
         />
       </div>
 
@@ -48,7 +59,7 @@ export default async function ERPLayout({ children }: { children: React.ReactNod
             initialTipo={initialTipo}
             initialLogo={initialLogo}
             tenantName={tenant.name}
-            isSuperAdmin={user?.isSuperAdmin || false}
+            isSuperAdmin={user.isSuperAdmin}
           />
         </div>
 
