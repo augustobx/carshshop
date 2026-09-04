@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { CarFront, Calculator, LayoutGrid, UserCircle, ArrowRight, LogOut } from 'lucide-react';
 import { useConfigStore } from '@/store/useConfigStore';
-import { signOut } from 'next-auth/react'; // Función mágica para cerrar sesión
+import { logoutAction } from '@/actions/auth';
 
 export default function PwaHomeClient({ userName }: { userName: string }) {
     const { logo } = useConfigStore();
@@ -61,7 +61,10 @@ export default function PwaHomeClient({ userName }: { userName: string }) {
                         </div>
                     </div>
                     <button
-                        onClick={() => signOut({ callbackUrl: '/login' })}
+                        onClick={async () => {
+                            await logoutAction();
+                            window.location.href = '/login';
+                        }}
                         className="p-3 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-2xl transition-all active:scale-90"
                         title="Cerrar Sesión"
                     >
