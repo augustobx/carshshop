@@ -6,7 +6,14 @@ import { notFound, redirect } from 'next/navigation';
 
 export default async function ERPLayout({ children }: { children: React.ReactNode }) {
   let tenant;
-  try { tenant = await getTenantContext(); } catch (error) { console.error('[ERP Tenant Context Error]:', error); notFound(); }
+  try {
+    tenant = await getTenantContext();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('TENANT_RESOLUTION_FAILED:SUSPENDED:')) redirect('/suspendido');
+    console.error('[ERP Tenant Context Error]:', error);
+    notFound();
+  }
 
   const user = await getLoggedUser();
   if (!user) redirect('/login');
