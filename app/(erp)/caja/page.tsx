@@ -28,68 +28,98 @@ export default async function CajaPage() {
   const transacciones: any[] = [];
   const seniasAplicadas = new Set<number>();
 
-  // En una venta sólo entra efectivo por el pago inicial: total si es contado, anticipo si es financiada.
-  // Si antes hubo una seña vinculada, esa plata ya ingresó el día de la reserva y se descuenta del ingreso del cierre.
+  // La seña es dinero histórico en ARS. Si el cierre usa otro TC, no cambia lo cobrado:
+  // se convierte ese ARS al TC de la venta sólo para obtener el equivalente contable en USD.
   ventasDb.forEach((v) => {
     const rate = Number(v.cotizacion_dolar_venta || dolarActual);
-    const seniasVenta = seniasDb.filter((s) => {
-      if (s.id_vehiculo !== v.id_vehiculo || s.id_cliente !== v.id_cliente || s.fecha_senia > v.fecha_venta) return false;
-      if (s.prospectoId && v.prospectoId) return s.prospectoId === v.prospectoId;
-      if (s.cotizacionId && v.cotizacionId) return s.cotizacionId === v.cotizacionId;
-      return !s.prospectoId && !s.cotizacionId;
-    });
-    const seniasUsd = seniasVenta.reduce((sum, s) => { seniasAplicadas.add(s.id_senia); return sum + Number(s.monto_usd || 0); }, 0);
+    const candidates = seniasDb
+      .filter((s) => s.id_vehiculo === v.id_vehiculo && s.id_cliente === v.id_cliente && s.fecha_senia <= v.fecha_venta)
+      .sort((a, b) => b.fecha_senia.getTime() - a.fecha_senia.getTime());
+
+    let seniaVenta = candidates.find((s) => s.prospectoId && v.prospectoId && s.prospectoId === v.prospectoId)
+      || candidates.find((s) => s.cotizacionId && v.cotizacionId && s.cotizacionId === v.cotizacionId)
+      || candidates[0]
+      || null;
+
+    const seniaArs = seniaVenta ? Number(seniaVenta.monto_ars || 0) : 0;
+    const seniaUsdAtSaleRate = rate > 0 ? seniaArs / rate : 0;
+    if (seniaVenta) seniasAplicadas.add(seniaVenta.id_senia);
+
     const inicialUsd = v.forma_pago === 'Contado' ? Number(v.precio_final_usd || 0) : Number(v.anticipo_usd || 0);
-    const efectivoCierreUsd = Math.max(0, inicialUsd - seniasUsd);
+    const efectivoCierreUsd = Math.max(0, inicialUsd - seniaUsdAtSaleRate);
     if (efectivoCierreUsd > 0) transacciones.push({
-      id: `VTA-${v.id_venta}`, fecha_str: v.fecha_venta.toISOString(),
+      id: `VTA-${v.id_venta}`,
+      fecha_str: v.fecha_venta.toISOString(),
       concepto: `${v.forma_pago === 'Contado' ? 'Cobro venta contado' : 'Anticipo venta'}: ${v.vehiculo?.marca || ''} ${v.vehiculo?.modelo || ''} (${v.cliente?.nombre_completo || 'Cliente'})`,
-      categoria: 'Venta Vehículo', tipo: 'INGRESO', monto_ars: efectivoCierreUsd * rate, monto_usd: efectivoCierreUsd,
+      categoria: 'Venta Vehículo',
+      tipo: 'INGRESO',
+      monto_ars: efectivoCierreUsd * rate,
+      monto_usd: efectivoCierreUsd,
       referencia: v.numero_boleto || `Venta #${v.id_venta}`,
     });
   });
 
-  // La seña es un ingreso de caja en la fecha real de recepción. Una cancelada sin venta asociada se considera liberada/reintegrada y no integra el saldo histórico.
+  // La seña ingresa a caja en la fecha real de recepción. Si luego se aplica a una venta,
+  // se conserva como ingreso histórico y el cierre sólo registra el saldo faltante.
   seniasDb.forEach((s) => {
     if (s.estado !== 'ACTIVA' && !seniasAplicadas.has(s.id_senia)) return;
     transacciones.push({
-      id: `SEN-${s.id_senia}`, fecha_str: s.fecha_senia.toISOString(),
+      id: `SEN-${s.id_senia}`,
+      fecha_str: s.fecha_senia.toISOString(),
       concepto: `Reserva: ${s.vehiculo?.marca || ''} ${s.vehiculo?.modelo || ''} (${s.cliente?.nombre_completo || 'Cliente'})`,
-      categoria: 'Seña / Reserva', tipo: 'INGRESO', monto_ars: Number(s.monto_ars || 0), monto_usd: Number(s.monto_usd || 0),
+      categoria: 'Seña / Reserva',
+      tipo: 'INGRESO',
+      monto_ars: Number(s.monto_ars || 0),
+      monto_usd: Number(s.monto_usd || 0),
       referencia: s.recibo_nro || `Reserva #${s.id_senia}`,
     });
   });
 
   cuotasVentasDb.forEach((c) => transacciones.push({
-    id: `CVTA-${c.id_cuota}`, fecha_str: (c.fecha_pago || c.fecha_vencimiento).toISOString(),
+    id: `CVTA-${c.id_cuota}`,
+    fecha_str: (c.fecha_pago || c.fecha_vencimiento).toISOString(),
     concepto: `Cobro cuota venta ${c.numero_cuota} - ${c.venta?.cliente?.nombre_completo || 'Cliente'}`,
-    categoria: 'Cobro Financiación', tipo: 'INGRESO',
+    categoria: 'Cobro Financiación',
+    tipo: 'INGRESO',
     monto_ars: Number(c.monto_pagado_ars || (Number(c.monto_usd || 0) * Number(c.cotizacion_pago || dolarActual))),
-    monto_usd: Number(c.monto_usd || 0), referencia: c.recibo_nro || 'Cuota de venta',
+    monto_usd: Number(c.monto_usd || 0),
+    referencia: c.recibo_nro || 'Cuota de venta',
   }));
 
-  // Otorgar un préstamo es una salida real de caja al momento de entregar el capital.
   prestamosDb.forEach((p) => {
     const rate = Number(p.cotizacion_dolar_prestamo || dolarActual);
     const usd = Number(p.capital_entregado_usd || 0);
     transacciones.push({
-      id: `PRE-${p.id_prestamo}`, fecha_str: p.fecha_prestamo.toISOString(),
+      id: `PRE-${p.id_prestamo}`,
+      fecha_str: p.fecha_prestamo.toISOString(),
       concepto: `Capital entregado préstamo #${p.id_prestamo} - ${p.cliente?.nombre_completo || 'Cliente'}`,
-      categoria: 'Préstamo Otorgado', tipo: 'EGRESO', monto_ars: usd * rate, monto_usd: usd, referencia: `Préstamo #${p.id_prestamo}`,
+      categoria: 'Préstamo Otorgado',
+      tipo: 'EGRESO',
+      monto_ars: usd * rate,
+      monto_usd: usd,
+      referencia: `Préstamo #${p.id_prestamo}`,
     });
   });
 
   cuotasPrestamosDb.forEach((c) => transacciones.push({
-    id: `CPRE-${c.id_cuota}`, fecha_str: (c.fecha_pago || c.fecha_vencimiento).toISOString(),
+    id: `CPRE-${c.id_cuota}`,
+    fecha_str: (c.fecha_pago || c.fecha_vencimiento).toISOString(),
     concepto: `Cobro cuota préstamo ${c.numero_cuota} - ${c.prestamo?.cliente?.nombre_completo || 'Cliente'}`,
-    categoria: 'Cobro Préstamo', tipo: 'INGRESO',
+    categoria: 'Cobro Préstamo',
+    tipo: 'INGRESO',
     monto_ars: Number(c.monto_pagado_ars || (Number(c.monto_usd || 0) * Number(c.cotizacion_pago || dolarActual))),
-    monto_usd: Number(c.monto_usd || 0), referencia: c.recibo_nro || 'Cuota de préstamo',
+    monto_usd: Number(c.monto_usd || 0),
+    referencia: c.recibo_nro || 'Cuota de préstamo',
   }));
 
   movimientosDb.forEach((m) => transacciones.push({
-    id: `MOV-${m.id_gasto}`, fecha_str: m.fecha.toISOString(), concepto: m.descripcion || 'Sin descripción', categoria: m.categoria || 'Movimiento General',
-    tipo: m.tipo_movimiento || 'EGRESO', monto_ars: Number(m.monto_ars || 0), monto_usd: Number(m.monto_usd || 0),
+    id: `MOV-${m.id_gasto}`,
+    fecha_str: m.fecha.toISOString(),
+    concepto: m.descripcion || 'Sin descripción',
+    categoria: m.categoria || 'Movimiento General',
+    tipo: m.tipo_movimiento || 'EGRESO',
+    monto_ars: Number(m.monto_ars || 0),
+    monto_usd: Number(m.monto_usd || 0),
     referencia: m.vehiculo ? `${m.vehiculo.marca || ''} ${m.vehiculo.modelo || ''} · ${m.vehiculo.patente || 'S/P'}` : 'Manual',
   }));
 
