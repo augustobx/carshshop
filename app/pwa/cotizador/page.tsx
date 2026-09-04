@@ -30,7 +30,11 @@ export default async function PWACotizadorPage({ searchParams }: { searchParams:
       where: { tenantId: tenant.id, estado: 'ACTIVA' },
       include: {
         cliente: { select: { nombre_completo: true } },
-        cotizacionRef: { select: { id_cotizacion: true, precio_final_usd: true, cotizacion_dolar: true, createdAt: true, forma_pago: true, anticipo_usd: true, cantidad_cuotas: true, valor_cuota_usd: true } },
+        cotizacionRef: { select: {
+          id_cotizacion: true, precio_final_usd: true, cotizacion_dolar: true, createdAt: true,
+          forma_pago: true, anticipo_usd: true, cantidad_cuotas: true, valor_cuota_usd: true,
+          tiene_permuta: true, detalle_permuta: true, valor_permuta_usd: true,
+        } },
       },
       orderBy: { fecha_senia: 'desc' },
     }),
@@ -79,6 +83,9 @@ export default async function PWACotizadorPage({ searchParams }: { searchParams:
       anticipo_usd: Number(s.cotizacionRef.anticipo_usd || 0),
       cantidad_cuotas: s.cotizacionRef.cantidad_cuotas,
       valor_cuota_usd: Number(s.cotizacionRef.valor_cuota_usd || 0),
+      tiene_permuta: s.cotizacionRef.tiene_permuta,
+      detalle_permuta: s.cotizacionRef.detalle_permuta || '',
+      valor_permuta_usd: Number(s.cotizacionRef.valor_permuta_usd || 0),
     } : null,
   }));
 
@@ -90,12 +97,16 @@ export default async function PWACotizadorPage({ searchParams }: { searchParams:
     notas: prospecto.notas || '',
     latestQuote: latestQuote ? {
       id: latestQuote.id_cotizacion,
+      id_cotizacion: latestQuote.id_cotizacion,
       precio_usd: Number(latestQuote.precio_final_usd || 0),
       rate: Number(latestQuote.cotizacion_dolar || dolarActual),
       forma_pago: latestQuote.forma_pago,
       anticipo_usd: Number(latestQuote.anticipo_usd || 0),
       cantidad_cuotas: latestQuote.cantidad_cuotas,
       valor_cuota_usd: Number(latestQuote.valor_cuota_usd || 0),
+      tiene_permuta: latestQuote.tiene_permuta,
+      detalle_permuta: latestQuote.detalle_permuta || '',
+      valor_permuta_usd: Number(latestQuote.valor_permuta_usd || 0),
       observaciones: latestQuote.observaciones || '',
     } : null,
   } : null;
