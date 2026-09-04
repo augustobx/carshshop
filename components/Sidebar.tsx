@@ -8,7 +8,7 @@ import { logoutAction } from '@/actions/auth';
 import {
   Car, LayoutDashboard, BadgeDollarSign, Users, CalendarClock, HandCoins, Settings,
   LogOut, Wallet, CarFront, ShieldCheck, Bike, UserCheck, Building, ShieldAlert,
-  BriefcaseBusiness, Warehouse, Landmark, ChevronRight,
+  BriefcaseBusiness, Warehouse, Landmark, ChevronRight, BookOpen,
 } from 'lucide-react';
 
 type Role = 'OWNER' | 'MANAGER' | 'VENDEDOR' | 'ADMINISTRATIVO' | 'TALLER';
@@ -119,6 +119,7 @@ export default function Sidebar({
       <div className="p-3 border-t border-slate-800 shrink-0 space-y-1.5">
         <div className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-800"><p className="text-[9px] uppercase tracking-widest font-black text-slate-600">Rol actual</p><p className="text-xs font-black text-slate-300 mt-0.5">{isSuperAdmin ? 'SUPERADMIN' : role}</p></div>
         {isSuperAdmin && <Link href="/superadmin" className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/15"><ShieldAlert className="w-4 h-4" /> SuperAdmin Plataforma</Link>}
+        <Link href="/manual" className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-900 hover:text-white"><BookOpen className="w-4 h-4" />Manual de usuario</Link>
         {canConfigure && <Link href="/configuracion" style={isActive('/configuracion') ? { backgroundColor: 'var(--color-brand, #2563eb)', color: 'white' } : {}} className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${isActive('/configuracion') ? 'text-white' : 'hover:bg-slate-900 hover:text-white'}`}><Settings className="w-4 h-4" />Configuración</Link>}
         <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-red-400 hover:bg-red-950/20 hover:text-red-300"><LogOut className="w-4 h-4" />Cerrar sesión</button>
       </div>
