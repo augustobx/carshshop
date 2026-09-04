@@ -4,7 +4,7 @@ import { prisma as db } from '@/lib/prisma';
 import { getTenantContext } from '@/lib/tenant-context';
 import { requireTenantRole } from '@/lib/user-auth';
 import { revalidatePath } from 'next/cache';
-import { RolMembresia } from '@prisma/client';
+import { EstadoTarea, RolMembresia } from '@prisma/client';
 
 const WORKSHOP_ROLES = [RolMembresia.OWNER, RolMembresia.MANAGER, RolMembresia.ADMINISTRATIVO, RolMembresia.TALLER];
 
@@ -20,19 +20,19 @@ export async function agregarTarea(idVehiculo: number, descripcion: string) {
     if (!text) return { success: false, error: 'La descripción de la tarea es obligatoria.' };
     if (!(await vehicleForTenant(idVehiculo, tenant.id))) return { success: false, error: 'Vehículo inexistente.' };
 
-    await db.tarea.create({ data: { tenantId: tenant.id, id_vehiculo: idVehiculo, descripcion: text, estado_tarea: 'PENDIENTE' } });
+    await db.tarea.create({ data: { tenantId: tenant.id, id_vehiculo: idVehiculo, descripcion: text, estado_tarea: EstadoTarea.PENDIENTE } });
     revalidatePath(`/vehiculos/${idVehiculo}`); revalidatePath('/vehiculos'); revalidatePath('/motos');
     return { success: true };
   } catch (error) { console.error('Error agregando tarea:', error); return { success: false, error: 'Error al crear la tarea.' }; }
 }
 
-export async function cambiarEstadoTarea(idTarea: number, nuevoEstado: 'PENDIENTE' | 'FINALIZADA', idVehiculo: number) {
+export async function cambiarEstadoTarea(idTarea: number, nuevoEstado: EstadoTarea.PENDIENTE | EstadoTarea.COMPLETADA, idVehiculo: number) {
   try {
     const tenant = await getTenantContext();
     await requireTenantRole(tenant.id, WORKSHOP_ROLES);
     const tarea = await db.tarea.findFirst({ where: { id_tarea: idTarea, tenantId: tenant.id, id_vehiculo: idVehiculo } });
     if (!tarea) return { success: false, error: 'Tarea inexistente.' };
-    await db.tarea.update({ where: { id_tarea: idTarea }, data: { estado_tarea: nuevoEstado, fecha_fin: nuevoEstado === 'FINALIZADA' ? new Date() : null } });
+    await db.tarea.update({ where: { id_tarea: idTarea }, data: { estado_tarea: nuevoEstado, fecha_fin: nuevoEstado === EstadoTarea.COMPLETADA ? new Date() : null } });
     revalidatePath(`/vehiculos/${idVehiculo}`); revalidatePath('/vehiculos'); revalidatePath('/motos');
     return { success: true };
   } catch { return { success: false, error: 'Error al actualizar tarea.' }; }
