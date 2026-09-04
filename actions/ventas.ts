@@ -42,9 +42,7 @@ export async function registrarVenta(data: {
 
     if (role === RolMembresia.VENDEDOR && !user.isSuperAdmin) {
       const sellerPwaFeature = await db.tenantFeature.findUnique({ where: { tenantId_featureKey: { tenantId: tenant.id, featureKey: 'seller_pwa' } } });
-      if (!normalizeSellerPwaConfig(sellerPwaFeature?.config).allowCloseSales) {
-        return { success: false, error: 'El cierre de ventas desde la cuenta de vendedor está deshabilitado por configuración.' };
-      }
+      if (!normalizeSellerPwaConfig(sellerPwaFeature?.config).allowCloseSales) return { success: false, error: 'El cierre de ventas desde la cuenta de vendedor está deshabilitado por configuración.' };
     }
 
     const precioUsd = Number(data.precio_final_usd);
@@ -74,15 +72,15 @@ export async function registrarVenta(data: {
         const p = await tx.prospecto.findFirst({ where: { id_prospecto: prospectoId, tenantId: tenant.id } });
         if (!p) throw new Error('El prospecto indicado no pertenece a esta concesionaria.');
       } else {
-        const p = await tx.prospecto.findFirst({
-          where: { tenantId: tenant.id, id_cliente: data.id_cliente, id_vehiculo_interes: data.id_vehiculo, estado: { notIn: ['PERDIDO', 'GANADO'] } },
-          orderBy: { updatedAt: 'desc' },
-        });
+        const p = await tx.prospecto.findFirst({ where: { tenantId: tenant.id, id_cliente: data.id_cliente, id_vehiculo_interes: data.id_vehiculo, estado: { notIn: ['PERDIDO', 'GANADO'] } }, orderBy: { updatedAt: 'desc' } });
         prospectoId = p?.id_prospecto || null;
       }
 
-      let cotizacionId = data.cotizacionId || (data.usarCotizacionReserva ? reservaActiva?.cotizacionId || null : null);
-      if (data.usarCotizacionReserva) {
+      const isReservationQuote = Boolean(reservaActiva?.cotizacionId && data.cotizacionId && reservaActiva.cotizacionId === data.cotizacionId);
+      const useReservedQuote = Boolean(data.usarCotizacionReserva || isReservationQuote);
+      let cotizacionId = data.cotizacionId || (useReservedQuote ? reservaActiva?.cotizacionId || null : null);
+
+      if (useReservedQuote) {
         if (!reservaActiva?.cotizacionRef) throw new Error('La reserva no tiene una cotización histórica vinculada.');
         const qPrice = Number(reservaActiva.cotizacionRef.precio_final_usd || 0);
         const qRate = Number(reservaActiva.cotizacionRef.cotizacion_dolar || 0);
@@ -104,20 +102,18 @@ export async function registrarVenta(data: {
       if (data.permuta && Number(data.permuta.valor_toma_usd) > 0) {
         valorTomaPermuta = Number(data.permuta.valor_toma_usd);
         if (!data.permuta.marca?.trim() || !data.permuta.modelo?.trim() || !Number.isFinite(Number(data.permuta.anio))) throw new Error('La permuta requiere marca, modelo y año válidos.');
-        const permutado = await tx.vehiculo.create({
-          data: {
-            tenantId: tenant.id,
-            locationId: vehiculoVenta.locationId || tenant.primaryLocationId || null,
-            tipo_vehiculo: data.permuta.tipo_vehiculo || 'Auto',
-            marca: data.permuta.marca.trim(), modelo: data.permuta.modelo.trim(), version: data.permuta.version?.trim() || null,
-            anio: Number(data.permuta.anio), km: Math.max(0, Number(data.permuta.km || 0)),
-            patente: data.permuta.patente?.trim() ? data.permuta.patente.toUpperCase().trim() : null,
-            color: data.permuta.color?.trim() || null, motor: data.permuta.motor?.trim() || null,
-            tipo_ingreso: 'Permuta', estado: 'EN_PREPARACION',
-            precio_compra_usd: valorTomaPermuta, precio_compra_ars: valorTomaPermuta * rate, costo_total_real_usd: valorTomaPermuta,
-            id_cliente: data.id_cliente,
-          },
-        });
+        const permutado = await tx.vehiculo.create({ data: {
+          tenantId: tenant.id,
+          locationId: vehiculoVenta.locationId || tenant.primaryLocationId || null,
+          tipo_vehiculo: data.permuta.tipo_vehiculo || 'Auto',
+          marca: data.permuta.marca.trim(), modelo: data.permuta.modelo.trim(), version: data.permuta.version?.trim() || null,
+          anio: Number(data.permuta.anio), km: Math.max(0, Number(data.permuta.km || 0)),
+          patente: data.permuta.patente?.trim() ? data.permuta.patente.toUpperCase().trim() : null,
+          color: data.permuta.color?.trim() || null, motor: data.permuta.motor?.trim() || null,
+          tipo_ingreso: 'Permuta', estado: 'EN_PREPARACION',
+          precio_compra_usd: valorTomaPermuta, precio_compra_ars: valorTomaPermuta * rate, costo_total_real_usd: valorTomaPermuta,
+          id_cliente: data.id_cliente,
+        } });
         idVehiculoPermuta = permutado.id_vehiculo;
       }
 
@@ -129,17 +125,37 @@ export async function registrarVenta(data: {
       if (data.forma_pago === 'Cuotas' && anticipo + valorTomaPermuta >= precioUsd) throw new Error('Anticipo y permuta no pueden cubrir o superar el total si la operación se marca financiada.');
       if (data.forma_pago === 'Cuotas' && (!data.cuotas?.length || saldo <= 0)) throw new Error('La venta financiada requiere saldo y plan de cuotas.');
 
-      const venta = await tx.venta.create({
-        data: {
-          tenantId: tenant.id, locationId: vehiculoVenta.locationId || tenant.primaryLocationId || null,
-          id_vehiculo: data.id_vehiculo, id_cliente: data.id_cliente, vendedorId: user.id,
-          prospectoId, cotizacionId, precio_final_usd: precioUsd, cotizacion_dolar_venta: rate,
-          forma_pago: data.forma_pago, anticipo_usd: anticipo, saldo_financiado_usd: saldo,
-          comision_vendedor_usd: Math.max(0, Number(data.comision_vendedor_usd || 0)),
-          id_vehiculo_permuta: idVehiculoPermuta, valor_toma_permuta_usd: valorTomaPermuta,
-          observaciones: data.observaciones?.trim() || null,
-        },
-      });
+      // Si había reserva y el usuario eligió el precio actual, generamos una nueva cotización
+      // de cierre. La cotización histórica de la reserva permanece intacta.
+      if (reservaActiva && !useReservedQuote) {
+        const closingQuote = await tx.cotizacion.create({ data: {
+          tenantId: tenant.id,
+          prospectoId,
+          id_cliente: data.id_cliente,
+          id_vehiculo: data.id_vehiculo,
+          vendedorId: user.id,
+          estado: 'ACEPTADA',
+          precio_final_usd: precioUsd,
+          cotizacion_dolar: rate,
+          forma_pago: data.forma_pago,
+          anticipo_usd: anticipo,
+          saldo_financiado_usd: saldo,
+          valor_permuta_usd: valorTomaPermuta,
+          tiene_permuta: Boolean(idVehiculoPermuta),
+          observaciones: 'Cotización de cierre creada al elegir el valor vigente de una unidad reservada.',
+        } });
+        cotizacionId = closingQuote.id_cotizacion;
+      }
+
+      const venta = await tx.venta.create({ data: {
+        tenantId: tenant.id, locationId: vehiculoVenta.locationId || tenant.primaryLocationId || null,
+        id_vehiculo: data.id_vehiculo, id_cliente: data.id_cliente, vendedorId: user.id,
+        prospectoId, cotizacionId, precio_final_usd: precioUsd, cotizacion_dolar_venta: rate,
+        forma_pago: data.forma_pago, anticipo_usd: anticipo, saldo_financiado_usd: saldo,
+        comision_vendedor_usd: Math.max(0, Number(data.comision_vendedor_usd || 0)),
+        id_vehiculo_permuta: idVehiculoPermuta, valor_toma_permuta_usd: valorTomaPermuta,
+        observaciones: data.observaciones?.trim() || null,
+      } });
       const numeroBoleto = `BOL-${new Date().getFullYear()}-${String(venta.id_venta).padStart(6, '0')}`;
       await tx.venta.update({ where: { id_venta: venta.id_venta }, data: { numero_boleto: numeroBoleto } });
 
