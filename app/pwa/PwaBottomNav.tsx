@@ -1,10 +1,11 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { Calculator, LayoutGrid, Handshake } from 'lucide-react';
 
 export default function PwaBottomNav({ active }: { active: 'stock' | 'quote' | 'operations' }) {
-  const item = (key: 'stock' | 'quote' | 'operations', href: string, label: string, icon: React.ReactNode) => (
+  const item = (key: 'stock' | 'quote' | 'operations', href: string, label: string, icon: ReactNode) => (
     <Link href={href} className={`flex min-w-0 flex-1 flex-col items-center gap-1 py-1 ${active === key ? 'text-indigo-600' : 'text-slate-400'}`}>
       {icon}
       <span className="text-[10px] font-black uppercase tracking-wide">{label}</span>
