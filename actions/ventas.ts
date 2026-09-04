@@ -3,6 +3,7 @@
 import { prisma as db } from '@/lib/prisma';
 import { getTenantContext } from '@/lib/tenant-context';
 import { requireTenantRole } from '@/lib/user-auth';
+import { normalizeSellerPwaConfig } from '@/lib/seller-pwa-config';
 import { revalidatePath } from 'next/cache';
 import { RolMembresia } from '@prisma/client';
 
@@ -37,7 +38,15 @@ export async function registrarVenta(data: {
 }) {
   try {
     const tenant = await getTenantContext();
-    const { user } = await requireTenantRole(tenant.id, SALE_ROLES);
+    const { user, role } = await requireTenantRole(tenant.id, SALE_ROLES);
+
+    if (role === RolMembresia.VENDEDOR && !user.isSuperAdmin) {
+      const sellerPwaFeature = await db.tenantFeature.findUnique({ where: { tenantId_featureKey: { tenantId: tenant.id, featureKey: 'seller_pwa' } } });
+      if (!normalizeSellerPwaConfig(sellerPwaFeature?.config).allowCloseSales) {
+        return { success: false, error: 'El cierre de ventas desde la cuenta de vendedor está deshabilitado por configuración.' };
+      }
+    }
+
     const precioUsd = Number(data.precio_final_usd);
     const rate = Number(data.cotizacion_dolar);
     if (!Number.isFinite(precioUsd) || precioUsd <= 0 || !Number.isFinite(rate) || rate <= 0) return { success: false, error: 'Precio final y cotización deben ser mayores a cero.' };
@@ -72,8 +81,6 @@ export async function registrarVenta(data: {
         prospectoId = p?.id_prospecto || null;
       }
 
-      // Una reserva puede cerrarse respetando su cotización histórica o con precio/TC actual.
-      // Sólo vinculamos la Venta a la cotización histórica cuando el usuario la eligió explícitamente.
       let cotizacionId = data.cotizacionId || (data.usarCotizacionReserva ? reservaActiva?.cotizacionId || null : null);
       if (data.usarCotizacionReserva) {
         if (!reservaActiva?.cotizacionRef) throw new Error('La reserva no tiene una cotización histórica vinculada.');
@@ -114,8 +121,6 @@ export async function registrarVenta(data: {
         idVehiculoPermuta = permutado.id_vehiculo;
       }
 
-      // La seña fue cobrada en ARS. Al cambiar el TC, su crédito en USD debe recalcularse
-      // usando el TC elegido para esta venta, sin alterar el importe histórico recibido.
       const reservaUsdAplicada = reservaActiva ? Number(reservaActiva.monto_ars || 0) / rate : 0;
       const anticipoSolicitado = Math.max(0, Number(data.anticipo_usd || 0));
       const anticipo = data.forma_pago === 'Contado' ? precioUsd : Math.max(anticipoSolicitado, reservaUsdAplicada);
