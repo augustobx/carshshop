@@ -20,18 +20,19 @@ COPY . .
 RUN ./node_modules/.bin/prisma generate \
     && npm run build
 
-# Imagen one-shot para migraciones en producción
+# Imagen one-shot para sincronizar schema en entornos sin historial de migraciones.
+# OnlyCars actualmente no contiene prisma/migrations, por eso migrate deploy no crea tablas.
 FROM base AS database-migrate
 ENV NODE_ENV=production
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
-CMD ["sh", "-c", "./node_modules/.bin/prisma generate && ./node_modules/.bin/prisma migrate deploy"]
+CMD ["sh", "-c", "./node_modules/.bin/prisma generate && ./node_modules/.bin/prisma db push"]
 
 # Imagen para inicialización y seed inicial idempotente
 FROM database-migrate AS database-init
 COPY scripts ./scripts
-CMD ["sh", "-c", "./node_modules/.bin/prisma generate && ./node_modules/.bin/prisma migrate deploy && node scripts/seed-saas.mjs"]
+CMD ["sh", "-c", "./node_modules/.bin/prisma generate && ./node_modules/.bin/prisma db push && node scripts/seed-saas.mjs"]
 
 FROM base AS runner
 WORKDIR /app
