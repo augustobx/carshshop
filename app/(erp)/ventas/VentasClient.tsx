@@ -30,7 +30,7 @@ export default function VentasClient({ ventas, dolarActual }: { ventas: any[]; d
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-5"><div className="p-4 bg-emerald-100 rounded-xl text-emerald-700"><BadgeDollarSign className="w-8 h-8" /></div><div><p className="text-xs font-black text-slate-500 uppercase tracking-wider mb-1">Volumen histórico facturado</p><DualMoney ars={totalVentasArs} usd={totalVentasUsd} rate={dolarActual} primaryClassName="text-3xl font-black text-slate-900" /></div></div>
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-5"><div className="p-4 bg-indigo-100 rounded-xl text-indigo-700"><Clock className="w-8 h-8" /></div><div><p className="text-xs font-black text-slate-500 uppercase tracking-wider mb-1">Capital pendiente de cobro</p><DualMoney usd={capitalEnCalleUsd} rate={dolarActual} primaryClassName="text-3xl font-black text-indigo-800" helper={undefined as never} /></div></div>
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-5"><div className="p-4 bg-indigo-100 rounded-xl text-indigo-700"><Clock className="w-8 h-8" /></div><div><p className="text-xs font-black text-slate-500 uppercase tracking-wider mb-1">Capital pendiente de cobro</p><DualMoney usd={capitalEnCalleUsd} rate={dolarActual} primaryClassName="text-3xl font-black text-indigo-800" /></div></div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
