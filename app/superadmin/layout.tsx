@@ -1,4 +1,7 @@
 import { getLoggedUser } from '@/lib/user-auth';
+import { getPlatformHost, isPlatformHostname } from '@/lib/domain-config';
+import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { logoutAction } from '@/actions/auth';
 import {
@@ -12,6 +15,11 @@ import {
 } from 'lucide-react';
 
 export default async function SuperAdminLayout({ children }: { children: React.ReactNode }) {
+  const requestHeaders = await headers();
+  const host = (requestHeaders.get('x-forwarded-host') || requestHeaders.get('host') || '').split(':')[0].toLowerCase();
+  const isLocal = ['localhost', '127.0.0.1', '::1'].includes(host);
+  if (!isLocal && !isPlatformHostname(host)) redirect(`https://${getPlatformHost()}/superadmin`);
+
   const user = await getLoggedUser();
 
   // /superadmin/login debe seguir siendo público. Cada página protegida valida SuperAdmin.
@@ -20,6 +28,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   const handleLogout = async () => {
     'use server';
     await logoutAction();
+    redirect('/superadmin/login');
   };
 
   const navItems = [
