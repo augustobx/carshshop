@@ -2,72 +2,137 @@
 
 import { prisma as db } from '@/lib/prisma';
 import { getTenantContext } from '@/lib/tenant-context';
+import { requireTenantRole } from '@/lib/user-auth';
 import { revalidatePath } from 'next/cache';
+import { RolMembresia } from '@prisma/client';
 
-export async function updateConfig(clave: string, valor: string) {
+const CONFIG_ROLES = [RolMembresia.OWNER, RolMembresia.MANAGER];
+const DOLAR_ROLES = [RolMembresia.OWNER, RolMembresia.MANAGER, RolMembresia.ADMINISTRATIVO];
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+
+export async function guardarConfiguracion(data: {
+  appName?: string;
+  dolarActual: number;
+  tipoDolar: string;
+  tnaFinanciacion?: number;
+  comisionVentaDefecto?: number;
+  logoUrl?: string | null;
+  primaryColor?: string;
+  secondaryColor?: string;
+  telefonoContacto?: string;
+  emailContacto?: string;
+  whatsappLead?: string;
+  cuit?: string;
+  razonSocial?: string;
+  direccion?: string;
+  pieImpresion?: string;
+}) {
   try {
     const tenant = await getTenantContext();
+    await requireTenantRole(tenant.id, CONFIG_ROLES);
 
-    const dataToUpdate: any = {};
-    if (clave === 'dolar_actual') dataToUpdate.dolarActual = parseFloat(valor) || 1400;
-    else if (clave === 'tipo_dolar') dataToUpdate.tipoDolar = valor;
-    else if (clave === 'empresa_logo') dataToUpdate.logoUrl = valor;
-    else if (clave === 'tna') dataToUpdate.tnaFinanciacion = parseFloat(valor) || 48;
-    else if (clave === 'empresa_tema') {
-      try {
-        const parsed = JSON.parse(valor);
-        if (parsed.primary) dataToUpdate.primaryColor = parsed.primary;
-        if (parsed.secondary) dataToUpdate.secondaryColor = parsed.secondary;
-      } catch {}
-    }
+    const dolar = Number(data.dolarActual);
+    if (!Number.isFinite(dolar) || dolar <= 0) return { success: false, error: 'La cotización del dólar debe ser mayor a cero.' };
+    if (!['blue', 'oficial', 'mep'].includes(data.tipoDolar)) return { success: false, error: 'Tipo de dólar inválido.' };
+    if (data.primaryColor && !HEX_RE.test(data.primaryColor)) return { success: false, error: 'Color principal inválido.' };
+    if (data.secondaryColor && !HEX_RE.test(data.secondaryColor)) return { success: false, error: 'Color secundario inválido.' };
+    if (data.logoUrl?.startsWith('data:') && data.logoUrl.length > 1_500_000) return { success: false, error: 'El logo es demasiado pesado. Usá una imagen menor a 1 MB.' };
 
-    await db.tenantSettings.upsert({
+    const settings = await db.tenantSettings.upsert({
       where: { tenantId: tenant.id },
-      update: dataToUpdate,
+      update: {
+        appName: data.appName?.trim() || tenant.name,
+        dolarActual: dolar,
+        tipoDolar: data.tipoDolar,
+        tnaFinanciacion: Math.max(0, Number(data.tnaFinanciacion || 0)),
+        comisionVentaDefecto: Math.max(0, Number(data.comisionVentaDefecto || 0)),
+        logoUrl: data.logoUrl || null,
+        primaryColor: data.primaryColor || '#2563eb',
+        secondaryColor: data.secondaryColor || '#0f172a',
+        telefonoContacto: data.telefonoContacto?.trim() || null,
+        emailContacto: data.emailContacto?.trim() || null,
+        whatsappLead: data.whatsappLead?.trim() || null,
+        cuit: data.cuit?.trim() || null,
+        razonSocial: data.razonSocial?.trim() || null,
+        direccion: data.direccion?.trim() || null,
+        pieImpresion: data.pieImpresion?.trim() || null,
+      },
       create: {
         tenantId: tenant.id,
-        appName: tenant.name,
-        ...dataToUpdate,
+        appName: data.appName?.trim() || tenant.name,
+        dolarActual: dolar,
+        tipoDolar: data.tipoDolar,
+        tnaFinanciacion: Math.max(0, Number(data.tnaFinanciacion || 0)),
+        comisionVentaDefecto: Math.max(0, Number(data.comisionVentaDefecto || 0)),
+        logoUrl: data.logoUrl || null,
+        primaryColor: data.primaryColor || '#2563eb',
+        secondaryColor: data.secondaryColor || '#0f172a',
+        telefonoContacto: data.telefonoContacto?.trim() || null,
+        emailContacto: data.emailContacto?.trim() || null,
+        whatsappLead: data.whatsappLead?.trim() || null,
+        cuit: data.cuit?.trim() || null,
+        razonSocial: data.razonSocial?.trim() || null,
+        direccion: data.direccion?.trim() || null,
+        pieImpresion: data.pieImpresion?.trim() || null,
       },
     });
 
     revalidatePath('/', 'layout');
-    return { success: true };
+    revalidatePath('/configuracion');
+    return { success: true, settings };
   } catch (error: any) {
     console.error('Error guardando configuración:', error);
-    return { success: false, error: 'Error guardando configuración' };
+    return { success: false, error: 'No se pudo guardar la configuración.' };
+  }
+}
+
+// Compatibilidad con llamadas legacy mientras se termina la normalización.
+export async function updateConfig(clave: string, valor: string) {
+  try {
+    const tenant = await getTenantContext();
+    await requireTenantRole(tenant.id, CONFIG_ROLES);
+    const dataToUpdate: Record<string, unknown> = {};
+    if (clave === 'dolar_actual') dataToUpdate.dolarActual = parseFloat(valor) || 1400;
+    else if (clave === 'tipo_dolar' && ['blue', 'oficial', 'mep'].includes(valor)) dataToUpdate.tipoDolar = valor;
+    else if (clave === 'empresa_logo') dataToUpdate.logoUrl = valor || null;
+    else if (clave === 'tna') dataToUpdate.tnaFinanciacion = Math.max(0, parseFloat(valor) || 0);
+    else if (clave === 'empresa_tema') {
+      const parsed = JSON.parse(valor);
+      if (parsed.primary && HEX_RE.test(parsed.primary)) dataToUpdate.primaryColor = parsed.primary;
+      if (parsed.secondary && HEX_RE.test(parsed.secondary)) dataToUpdate.secondaryColor = parsed.secondary;
+    } else return { success: false, error: 'Configuración no permitida.' };
+
+    await db.tenantSettings.upsert({ where: { tenantId: tenant.id }, update: dataToUpdate, create: { tenantId: tenant.id, appName: tenant.name, ...dataToUpdate } });
+    revalidatePath('/', 'layout');
+    return { success: true };
+  } catch (error) {
+    console.error('Error guardando configuración legacy:', error);
+    return { success: false, error: 'Error guardando configuración.' };
   }
 }
 
 export async function syncDolarApi(tipo: string = 'blue') {
   try {
     const tenant = await getTenantContext();
+    await requireTenantRole(tenant.id, DOLAR_ROLES);
+    if (!['blue', 'oficial', 'mep'].includes(tipo)) return { success: false, error: 'Tipo de dólar inválido.' };
+
     const res = await fetch(`https://dolarapi.com/v1/dolares/${tipo}`, { cache: 'no-store' });
     if (!res.ok) throw new Error('API no responde');
-
     const data = await res.json();
-    const valorVenta = data.venta;
+    const valorVenta = Number(data.venta);
+    if (!Number.isFinite(valorVenta) || valorVenta <= 0) return { success: false, error: 'Cotización no encontrada.' };
 
-    if (valorVenta) {
-      await db.tenantSettings.upsert({
-        where: { tenantId: tenant.id },
-        update: {
-          dolarActual: parseFloat(valorVenta),
-          tipoDolar: tipo,
-        },
-        create: {
-          tenantId: tenant.id,
-          appName: tenant.name,
-          dolarActual: parseFloat(valorVenta),
-          tipoDolar: tipo,
-        },
-      });
+    await db.tenantSettings.upsert({
+      where: { tenantId: tenant.id },
+      update: { dolarActual: valorVenta, tipoDolar: tipo },
+      create: { tenantId: tenant.id, appName: tenant.name, dolarActual: valorVenta, tipoDolar: tipo },
+    });
 
-      revalidatePath('/', 'layout');
-      return { success: true, valor: valorVenta };
-    }
-    return { success: false, error: 'Cotización no encontrada' };
+    revalidatePath('/', 'layout');
+    return { success: true, valor: valorVenta };
   } catch (error) {
-    return { success: false, error: 'Error conectando con DolarAPI' };
+    console.error('Error sincronizando dólar:', error);
+    return { success: false, error: 'No se pudo actualizar la cotización.' };
   }
 }
