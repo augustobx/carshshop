@@ -1,6 +1,7 @@
 import "server-only";
 
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
 import { promisify } from "util";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
@@ -31,7 +32,7 @@ export interface AuthenticatedUser {
 }
 
 /**
- * Hash seguro de contraseña mediante scrypt nativo
+ * Hash seguro de contraseña mediante scrypt nativo.
  */
 export async function hashUserPassword(password: string): Promise<string> {
   const salt = crypto.randomBytes(16).toString("hex");
@@ -40,18 +41,55 @@ export async function hashUserPassword(password: string): Promise<string> {
 }
 
 /**
- * Verificación de contraseña contra hash scrypt con tiempo constante
+ * Detecta hashes bcrypt heredados del sistema anterior.
+ */
+export function isLegacyBcryptHash(storedHash: string): boolean {
+  return /^\$2[aby]\$\d{2}\$/.test(storedHash);
+}
+
+/**
+ * Verifica hashes scrypt actuales y bcrypt heredados.
  */
 export async function verifyUserPassword(password: string, storedHash: string): Promise<boolean> {
-  if (!storedHash.startsWith("scrypt$")) return false;
-  const parts = storedHash.split("$");
-  if (parts.length !== 3) return false;
-  const [, salt, expectedHex] = parts;
-  if (!salt || !expectedHex) return false;
+  if (storedHash.startsWith("scrypt$")) {
+    const parts = storedHash.split("$");
+    if (parts.length !== 3) return false;
+    const [, salt, expectedHex] = parts;
+    if (!salt || !expectedHex) return false;
 
-  const actual = (await scryptAsync(password, salt, 64)) as Buffer;
-  const expected = Buffer.from(expectedHex, "hex");
-  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+    const actual = (await scryptAsync(password, salt, 64)) as Buffer;
+    const expected = Buffer.from(expectedHex, "hex");
+    return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+  }
+
+  if (isLegacyBcryptHash(storedHash)) {
+    return bcrypt.compare(password, storedHash);
+  }
+
+  return false;
+}
+
+/**
+ * Convierte de forma segura un hash bcrypt heredado a scrypt después de un login válido.
+ * El updateMany evita sobrescribir un hash si otro proceso ya lo migró.
+ */
+export async function upgradeLegacyPasswordHash(
+  userId: string,
+  password: string,
+  storedHash: string
+): Promise<boolean> {
+  if (!isLegacyBcryptHash(storedHash)) return false;
+
+  const passwordHash = await hashUserPassword(password);
+  const result = await prisma.user.updateMany({
+    where: {
+      id: userId,
+      passwordHash: storedHash,
+    },
+    data: { passwordHash },
+  });
+
+  return result.count === 1;
 }
 
 function hashToken(token: string): string {
