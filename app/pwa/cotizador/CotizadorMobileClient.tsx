@@ -1,303 +1,98 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useConfigStore } from '@/store/useConfigStore';
+import Link from 'next/link';
+import { ArrowLeft, ArrowRight, Calculator, CheckCircle2, Loader2, UserPlus } from 'lucide-react';
 import { registrarVenta } from '@/actions/ventas';
-import { Calculator, ArrowLeft, ArrowRight, Banknote, CheckCircle2, Loader2, X } from 'lucide-react';
+import SearchCombobox from '@/components/common/SearchCombobox';
+import DualCurrencyInput from '@/components/common/DualCurrencyInput';
+import DualMoney from '@/components/common/DualMoney';
 
-export default function CotizadorMobileClient({ vehiculos, clientes }: { vehiculos: any[], clientes: any[] }) {
-    const formatMoney = (amount: number) => amount.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-    const router = useRouter();
-    const { dolarBlue } = useConfigStore();
+export default function CotizadorMobileClient({ vehiculos, clientes, dolarActual }: { vehiculos: any[]; clientes: any[]; dolarActual: number }) {
+  const router = useRouter();
+  const [step, setStep] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
+  const [vehiculoId, setVehiculoId] = useState('');
+  const [clienteId, setClienteId] = useState('');
+  const [precio, setPrecio] = useState({ ars: '', usd: '' });
+  const [formaPago, setFormaPago] = useState<'Contado' | 'Cuotas'>('Contado');
+  const [anticipo, setAnticipo] = useState({ ars: '', usd: '' });
+  const [cantidadCuotas, setCantidadCuotas] = useState('12');
+  const [recargoPct, setRecargoPct] = useState('36');
+  const [fechaPrimerCuota, setFechaPrimerCuota] = useState(() => { const d = new Date(); d.setMonth(d.getMonth() + 1); return d.toISOString().slice(0, 10); });
 
-    const [step, setStep] = useState(1);
-    const [isSubmitting, setIsSubmitting] = useState(false);
+  const vehiculo = useMemo(() => vehiculos.find((v) => String(v.id_vehiculo) === vehiculoId) || null, [vehiculos, vehiculoId]);
+  const cliente = useMemo(() => clientes.find((c) => String(c.id_cliente) === clienteId) || null, [clientes, clienteId]);
 
-    const [vSeleccionado, setVSeleccionado] = useState<any>(null);
-    const [cSeleccionado, setCSeleccionado] = useState<any>(null);
-    const [formaPago, setFormaPago] = useState<'Contado' | 'Cuotas'>('Contado');
+  const vehicleOptions = vehiculos.map((v) => ({ value: String(v.id_vehiculo), label: `${v.marca} ${v.modelo}${v.version ? ` ${v.version}` : ''}`, description: `${v.tipo_vehiculo} · ${v.anio || 'S/A'} · ${v.patente || 'S/P'} · $ ${Number(v.precio_venta_ars || 0).toLocaleString('es-AR')} / USD ${Number(v.precio_venta_usd || 0).toLocaleString('es-AR')}`, searchText: `${v.marca} ${v.modelo} ${v.version || ''} ${v.patente || ''} ${v.anio || ''}` }));
+  const clientOptions = clientes.map((c) => ({ value: String(c.id_cliente), label: c.nombre_completo, description: `DNI ${c.dni || 'S/D'}${c.telefono ? ` · ${c.telefono}` : ''}`, searchText: `${c.nombre_completo} ${c.dni || ''} ${c.cuit_cuil || ''} ${c.telefono || ''}` }));
 
-    const [precioArs, setPrecioArs] = useState('');
-    const [anticipoArs, setAnticipoArs] = useState('');
-    const [cantCuotas, setCantCuotas] = useState('12');
-    const [tnaAnual, setTnaAnual] = useState('36'); // Utilizado como % de recargo total
+  const selectVehicle = (id: string) => {
+    setVehiculoId(id);
+    const v = vehiculos.find((x) => String(x.id_vehiculo) === id);
+    if (v) setPrecio({ ars: String(Number(v.precio_venta_ars || 0)), usd: String(Number(v.precio_venta_usd || 0)) });
+  };
 
-    useEffect(() => {
-        if (vSeleccionado) {
-            setPrecioArs(vSeleccionado.precio_venta_ars?.toString() || '');
-        }
-    }, [vSeleccionado]);
+  const finalArs = Number(precio.ars || 0);
+  const finalUsd = Number(precio.usd || 0);
+  const anticipoArs = formaPago === 'Cuotas' ? Number(anticipo.ars || 0) : finalArs;
+  const anticipoUsd = formaPago === 'Cuotas' ? Number(anticipo.usd || 0) : finalUsd;
+  const capitalArs = formaPago === 'Cuotas' ? Math.max(0, finalArs - anticipoArs) : 0;
+  const capitalUsd = dolarActual > 0 ? capitalArs / dolarActual : 0;
+  const cuotasN = Math.max(1, Number(cantidadCuotas || 1));
+  const recargo = Math.max(0, Number(recargoPct || 0)) / 100;
+  const totalFinanciadoArs = capitalArs * (1 + recargo);
+  const cuotaArs = formaPago === 'Cuotas' ? totalFinanciadoArs / cuotasN : 0;
+  const cuotaUsd = dolarActual > 0 ? cuotaArs / dolarActual : 0;
 
-    const pFinalArs = parseFloat(precioArs) || 0;
-    const antArs = parseFloat(anticipoArs) || 0;
-    const saldoAFinanciarArs = Math.max(0, pFinalArs - antArs);
-    const cuotasN = parseInt(cantCuotas) || 12;
+  const plan = () => {
+    if (formaPago !== 'Cuotas') return undefined;
+    const base = new Date(`${fechaPrimerCuota}T12:00:00`);
+    return Array.from({ length: cuotasN }, (_, index) => {
+      const date = new Date(base); date.setMonth(date.getMonth() + index);
+      return { numero_cuota: index + 1, monto_usd: Number(cuotaUsd.toFixed(2)), fecha_vencimiento: date.toISOString() };
+    });
+  };
 
-    let valorCuotaArs = 0;
-    let totalFinanciadoArs = 0;
+  const confirmar = async () => {
+    if (!vehiculo || !cliente || finalArs <= 0 || finalUsd <= 0) return alert('Seleccioná vehículo, cliente y precio final.');
+    if (formaPago === 'Cuotas' && anticipoArs >= finalArs) return alert('El anticipo debe ser menor al precio final para financiar saldo.');
+    setSubmitting(true);
+    const res = await registrarVenta({
+      id_vehiculo: vehiculo.id_vehiculo,
+      id_cliente: cliente.id_cliente,
+      precio_final_usd: Number(finalUsd.toFixed(2)),
+      cotizacion_dolar: dolarActual,
+      forma_pago: formaPago,
+      anticipo_usd: Number(anticipoUsd.toFixed(2)),
+      saldo_financiado_usd: formaPago === 'Cuotas' ? Number(capitalUsd.toFixed(2)) : 0,
+      cuotas: plan(),
+    });
+    setSubmitting(false);
+    if (!res.success) return alert(res.error || 'No se pudo cerrar la operación.');
+    router.push(`/ventas/${res.id_venta}`);
+  };
 
-    // CÁLCULO DE TAXA DIRETA NA PWA
-    if (formaPago === 'Cuotas' && saldoAFinanciarArs > 0) {
-        const tna = parseFloat(tnaAnual) || 0;
-        if (tna > 0) {
-            const recargoTotal = saldoAFinanciarArs * (tna / 100);
-            totalFinanciadoArs = saldoAFinanciarArs + recargoTotal;
-            valorCuotaArs = totalFinanciadoArs / cuotasN;
-        } else {
-            valorCuotaArs = saldoAFinanciarArs / cuotasN;
-            totalFinanciadoArs = saldoAFinanciarArs;
-        }
-    }
+  return (
+    <div className="min-h-screen bg-slate-50 pb-28">
+      <header className="sticky top-0 z-40 bg-slate-950 text-white px-4 py-4 rounded-b-3xl shadow-lg">
+        <div className="flex items-center justify-between"><button onClick={() => step > 1 ? setStep(step - 1) : router.back()} className="p-2 rounded-xl bg-white/10"><ArrowLeft className="w-5 h-5" /></button><div className="text-center"><p className="text-[10px] uppercase tracking-widest font-black text-blue-400">OnlyCars Sales</p><h1 className="text-lg font-black">Cotizador móvil</h1></div><span className="text-xs font-black text-emerald-400">${dolarActual.toLocaleString('es-AR')}</span></div>
+        <div className="mt-4 h-1.5 rounded-full bg-slate-800 overflow-hidden"><div className="h-full bg-blue-500 transition-all" style={{ width: `${(step / 3) * 100}%` }} /></div>
+      </header>
 
-    const handleConfirmar = async () => {
-        if (!vSeleccionado || !cSeleccionado || pFinalArs <= 0) return alert('Faltan datos clave.');
+      <main className="p-4 space-y-4">
+        {step === 1 && <><section className="bg-white border rounded-3xl p-5 shadow-sm space-y-4"><div className="flex items-center gap-2"><Calculator className="w-5 h-5 text-blue-600" /><div><h2 className="font-black text-slate-900">Unidad y cliente</h2><p className="text-xs text-slate-500">Buscá por modelo/patente y nombre/DNI.</p></div></div><SearchCombobox label="Vehículo *" value={vehiculoId} onChange={selectVehicle} options={vehicleOptions} placeholder="Buscar vehículo..." required /><SearchCombobox label="Cliente *" value={clienteId} onChange={setClienteId} options={clientOptions} placeholder="Buscar cliente..." required /><Link href="/clientes" className="inline-flex items-center gap-1 text-xs font-black text-blue-700"><UserPlus className="w-4 h-4" /> Crear cliente desde ERP</Link></section>{vehiculo && <section className="bg-blue-50 border border-blue-200 rounded-2xl p-4"><p className="text-[10px] uppercase font-black text-blue-600">Precio publicado</p><DualMoney ars={vehiculo.precio_venta_ars} usd={vehiculo.precio_venta_usd} rate={dolarActual} primaryClassName="text-2xl font-black text-blue-950 mt-1" /></section>}</>}
 
-        setIsSubmitting(true);
-        const pFinalUsd = pFinalArs / dolarBlue;
-        const cuotaUsd = valorCuotaArs / dolarBlue;
+        {step === 2 && <section className="bg-white border rounded-3xl p-5 shadow-sm space-y-5"><div><h2 className="font-black text-slate-900">Precio y pago</h2><p className="text-xs text-slate-500">Podés editar ARS o USD; la otra moneda se sincroniza.</p></div><DualCurrencyInput label="Precio final" ars={precio.ars} usd={precio.usd} rate={dolarActual} onChange={setPrecio} required /><div className="grid grid-cols-2 gap-1.5 bg-slate-100 p-1.5 rounded-2xl"><button type="button" onClick={() => setFormaPago('Contado')} className={`py-3 rounded-xl text-sm font-black ${formaPago === 'Contado' ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}>Contado</button><button type="button" onClick={() => setFormaPago('Cuotas')} className={`py-3 rounded-xl text-sm font-black ${formaPago === 'Cuotas' ? 'bg-blue-600 text-white shadow' : 'text-slate-500'}`}>Financiado</button></div>{formaPago === 'Cuotas' && <div className="space-y-4 pt-2 border-t"><DualCurrencyInput label="Anticipo" ars={anticipo.ars} usd={anticipo.usd} rate={dolarActual} onChange={setAnticipo} /><div className="grid grid-cols-2 gap-3"><Field label="Cantidad de cuotas"><input type="number" min="1" value={cantidadCuotas} onChange={(e) => setCantidadCuotas(e.target.value)} className="w-full p-3 border rounded-xl" /></Field><Field label="Recargo total %"><input type="number" min="0" step="0.01" value={recargoPct} onChange={(e) => setRecargoPct(e.target.value)} className="w-full p-3 border rounded-xl" /></Field></div><Field label="Vencimiento primera cuota"><input type="date" value={fechaPrimerCuota} onChange={(e) => setFechaPrimerCuota(e.target.value)} className="w-full p-3 border rounded-xl" /></Field><div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4"><p className="text-[10px] uppercase font-black text-indigo-600">Saldo financiado</p><DualMoney ars={capitalArs} usd={capitalUsd} rate={dolarActual} compact /><p className="text-xs font-bold text-indigo-800 mt-3">{cuotasN} cuotas de $ {cuotaArs.toLocaleString('es-AR', { maximumFractionDigits: 0 })} · USD {cuotaUsd.toLocaleString('es-AR', { maximumFractionDigits: 2 })}</p></div></div>}</section>}
 
-        let planDePagos: any[] = [];
-        if (formaPago === 'Cuotas') {
-            planDePagos = Array.from({ length: cuotasN }).map((_, i) => {
-                const hoy = new Date();
-                let year = hoy.getFullYear();
-                let month = hoy.getMonth() + 2 + i;
-                while (month > 12) { month -= 12; year += 1; }
+        {step === 3 && <section className="bg-slate-950 text-white rounded-3xl p-6 shadow-xl space-y-5"><div><p className="text-[10px] uppercase tracking-widest font-black text-blue-400">Confirmación</p><h2 className="text-2xl font-black mt-1">{vehiculo?.marca} {vehiculo?.modelo}</h2><p className="text-sm text-slate-400">{cliente?.nombre_completo}</p></div><div className="border-y border-slate-800 py-4"><p className="text-[10px] uppercase font-black text-slate-500">Precio final</p><DualMoney ars={finalArs} usd={finalUsd} rate={dolarActual} primaryClassName="text-3xl font-black text-white" secondaryClassName="text-sm font-bold text-slate-400" /></div>{formaPago === 'Cuotas' ? <div className="space-y-3"><Summary label="Anticipo" ars={anticipoArs} usd={anticipoUsd} rate={dolarActual} /><Summary label="Capital financiado" ars={capitalArs} usd={capitalUsd} rate={dolarActual} /><div className="rounded-2xl bg-blue-500/10 border border-blue-400/20 p-4 text-center"><p className="text-xs font-black text-blue-300">PLAN DE PAGO</p><p className="text-3xl font-black mt-2">{cuotasN} × $ {cuotaArs.toLocaleString('es-AR', { maximumFractionDigits: 0 })}</p><p className="text-xs text-slate-400 mt-1">USD {cuotaUsd.toLocaleString('es-AR', { maximumFractionDigits: 2 })} por cuota</p></div></div> : <p className="text-sm text-emerald-300 font-bold">Operación de contado. Se registra el total como cobrado al cierre.</p>}</section>}
+      </main>
 
-                const yStr = year.toString();
-                const mStr = month.toString().padStart(2, '0');
-                const dStr = "10";
-
-                return {
-                    numero_cuota: i + 1,
-                    monto_usd: cuotaUsd,
-                    fecha_vencimiento: `${yStr}-${mStr}-${dStr}T12:00:00Z`
-                };
-            });
-        }
-
-        const res = await registrarVenta({
-            id_vehiculo: vSeleccionado.id_vehiculo,
-            id_cliente: cSeleccionado.id_cliente,
-            precio_final_usd: pFinalUsd,
-            cotizacion_dolar: dolarBlue,
-            forma_pago: formaPago,
-            cuotas: formaPago === 'Cuotas' ? planDePagos : undefined
-        });
-
-        if (res.success) {
-            alert('¡Operación cerrada con éxito!');
-            router.push('/pwa/dashboard');
-        } else {
-            alert(res.error);
-        }
-        setIsSubmitting(false);
-    };
-
-    return (
-        <div className="min-h-screen bg-slate-50 pb-24 font-sans">
-            {/* APP BAR FIJA (PREMIUM DARK) */}
-            <header className="bg-slate-900 text-white sticky top-0 z-50 shadow-md rounded-b-3xl mb-4">
-                <div className="px-4 py-5">
-                    <div className="flex items-center justify-between mb-5">
-                        <div className="flex items-center gap-3">
-                            <button onClick={() => router.back()} className="p-2 -ml-2 bg-slate-800 hover:bg-slate-700 rounded-xl transition-all">
-                                <ArrowLeft className="w-5 h-5 text-white" />
-                            </button>
-                            <h1 className="text-2xl font-black tracking-tight flex items-center gap-2">
-                                Cotizador
-                            </h1>
-                        </div>
-                        <div className="bg-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border border-emerald-500/30">
-                            U$S {dolarBlue}
-                        </div>
-                    </div>
-                    {/* PROGRESS BAR */}
-                    <div className="flex h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                        <div className="bg-[var(--color-brand,#4f46e5)] h-full transition-all duration-300" style={{ width: `${(step / 3) * 100}%` }} />
-                    </div>
-                </div>
-            </header>
-
-            <main className="p-4 space-y-4">
-                {step === 1 && (
-                    <div className="space-y-4 animate-in slide-in-from-right-4 fade-in">
-                        <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
-                            <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 block">1. Vehículo</label>
-                            <select
-                                className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-base rounded-2xl p-4 font-bold outline-none focus:ring-2 focus:ring-indigo-500 appearance-none"
-                                value={vSeleccionado?.id_vehiculo || ''}
-                                onChange={e => {
-                                    const v = vehiculos.find(x => x.id_vehiculo === parseInt(e.target.value));
-                                    setVSeleccionado(v);
-                                }}
-                            >
-                                <option value="" disabled>Tocar para elegir auto...</option>
-                                {vehiculos.map(v => (
-                                    <option key={v.id_vehiculo} value={v.id_vehiculo}>
-                                        {v.marca} {v.modelo} - {v.patente}
-                                    </option>
-                                ))}
-                            </select>
-                            {vSeleccionado && (
-                                <div className="mt-3 p-3 bg-indigo-50 rounded-xl flex justify-between items-center">
-                                    <span className="text-xs font-bold text-indigo-700 uppercase">Precio Lista</span>
-                                    <span className="font-black text-indigo-900">$ {formatMoney(vSeleccionado.precio_venta_ars)}</span>
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
-                            <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 block">2. Cliente</label>
-                            <select
-                                className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-base rounded-2xl p-4 font-bold outline-none focus:ring-2 focus:ring-indigo-500 appearance-none"
-                                value={cSeleccionado?.id_cliente || ''}
-                                onChange={e => {
-                                    const c = clientes.find(x => x.id_cliente === parseInt(e.target.value));
-                                    setCSeleccionado(c);
-                                }}
-                            >
-                                <option value="" disabled>Tocar para elegir cliente...</option>
-                                {clientes.map(c => (
-                                    <option key={c.id_cliente} value={c.id_cliente}>
-                                        {c.nombre_completo} ({c.dni || 'S/N'})
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-                )}
-
-                {step === 2 && (
-                    <div className="space-y-4 animate-in slide-in-from-right-4 fade-in">
-                        <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 space-y-5">
-                            <div>
-                                <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 block">Precio Negociado (ARS)</label>
-                                <div className="relative">
-                                    <Banknote className="absolute left-4 top-4 w-6 h-6 text-emerald-500" />
-                                    <input
-                                        type="number" step="any"
-                                        value={precioArs} onChange={e => setPrecioArs(e.target.value)}
-                                        className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-black text-2xl text-slate-800 focus:ring-2 focus:ring-emerald-500 outline-none"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="flex bg-slate-100 p-1.5 rounded-2xl">
-                                <button onClick={() => setFormaPago('Contado')} className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${formaPago === 'Contado' ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}>Contado</button>
-                                <button onClick={() => setFormaPago('Cuotas')} className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${formaPago === 'Cuotas' ? 'bg-indigo-600 shadow text-white' : 'text-slate-500'}`}>Financiado</button>
-                            </div>
-                        </div>
-
-                        {formaPago === 'Cuotas' && (
-                            <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 space-y-5 border-t-4 border-t-indigo-500">
-                                <div>
-                                    <label className="text-xs font-black text-indigo-600 uppercase tracking-widest mb-2 block">Anticipo (ARS)</label>
-                                    <input
-                                        type="number" step="any" placeholder="0"
-                                        value={anticipoArs} onChange={e => setAnticipoArs(e.target.value)}
-                                        className="w-full px-4 py-4 bg-indigo-50 border border-indigo-100 rounded-2xl font-black text-xl text-indigo-900 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                    />
-                                    <p className="text-xs text-slate-400 mt-2 font-bold text-right">Saldo a financiar: $ {formatMoney(saldoAFinanciarArs)}</p>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Cuotas</label>
-                                        <select value={cantCuotas} onChange={e => setCantCuotas(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-lg outline-none">
-                                            <option value="6">6</option>
-                                            <option value="12">12</option>
-                                            <option value="18">18</option>
-                                            <option value="24">24</option>
-                                            <option value="36">36</option>
-                                            <option value="48">48</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">% Recargo Total</label>
-                                        <input type="number" step="any" value={tnaAnual} onChange={e => setTnaAnual(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-lg outline-none" placeholder="Ex: 36" />
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {step === 3 && (
-                    <div className="animate-in slide-in-from-right-4 fade-in">
-                        <div className="bg-slate-900 rounded-[2rem] p-6 shadow-2xl border border-slate-800 text-white relative overflow-hidden">
-                            <div className="absolute top-[-20%] right-[-10%] w-64 h-64 bg-indigo-500 rounded-full blur-3xl opacity-20"></div>
-
-                            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-6">Propuesta Comercial</p>
-
-                            <h2 className="text-3xl font-black tracking-tight mb-1">{vSeleccionado?.marca}</h2>
-                            <p className="text-lg text-slate-400 font-medium mb-8">{vSeleccionado?.modelo}</p>
-
-                            <div className="space-y-4">
-                                <div className="flex justify-between items-end border-b border-slate-700/50 pb-4">
-                                    <span className="text-sm font-bold text-slate-400">Precio del Vehículo</span>
-                                    <span className="text-2xl font-black">$ {formatMoney(pFinalArs)}</span>
-                                </div>
-
-                                {formaPago === 'Cuotas' ? (
-                                    <>
-                                        <div className="flex justify-between items-end border-b border-slate-700/50 pb-4">
-                                            <span className="text-sm font-bold text-slate-400">Anticipo a entregar</span>
-                                            <span className="text-xl font-black text-emerald-400">$ {formatMoney(antArs)}</span>
-                                        </div>
-                                        <div className="pt-4 text-center bg-slate-800/50 rounded-2xl p-5 border border-slate-700">
-                                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Plan en Cuotas Fijas</p>
-                                            <p className="text-5xl font-black text-white">{cuotasN} <span className="text-2xl text-slate-500 font-medium">x</span></p>
-                                            <p className="text-4xl font-black text-indigo-400 mt-2">$ {formatMoney(valorCuotaArs)}</p>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div className="pt-4 text-center bg-slate-800/50 rounded-2xl p-5 border border-slate-700">
-                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">A abonar hoy</p>
-                                        <p className="text-5xl font-black text-emerald-400">$ {formatMoney(pFinalArs)}</p>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="mt-8 pt-4 border-t border-slate-700/50 flex justify-between items-center text-xs font-bold text-slate-500">
-                                <span>Titular: {cSeleccionado?.nombre_completo}</span>
-                                <span>Ref: U$S {formatMoney(pFinalArs / dolarBlue)}</span>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </main>
-
-            <div className="fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 p-4 pb-safe flex gap-3 shadow-[0_-10px_20px_rgba(0,0,0,0.05)]">
-                {step > 1 && (
-                    <button
-                        onClick={() => setStep(step - 1)}
-                        className="p-4 bg-slate-100 text-slate-600 rounded-2xl font-bold hover:bg-slate-200 transition-colors"
-                    >
-                        <X className="w-6 h-6" />
-                    </button>
-                )}
-
-                {step < 3 ? (
-                    <button
-                        onClick={() => setStep(step + 1)}
-                        disabled={step === 1 && (!vSeleccionado || !cSeleccionado)}
-                        className="flex-1 bg-indigo-600 text-white p-4 rounded-2xl font-black flex justify-center items-center gap-2 disabled:opacity-50 transition-all active:scale-95"
-                    >
-                        Siguiente <ArrowRight className="w-5 h-5" />
-                    </button>
-                ) : (
-                    <button
-                        onClick={handleConfirmar}
-                        disabled={isSubmitting}
-                        className="flex-1 bg-emerald-500 text-slate-900 p-4 rounded-2xl font-black flex justify-center items-center gap-2 disabled:opacity-50 transition-all active:scale-95 shadow-lg shadow-emerald-500/30"
-                    >
-                        {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : <CheckCircle2 className="w-6 h-6" />}
-                        Cerrar Venta
-                    </button>
-                )}
-            </div>
-        </div>
-    );
+      <footer className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white/95 backdrop-blur border-t p-4 pb-safe shadow-[0_-8px_24px_rgba(0,0,0,.08)]">{step < 3 ? <button onClick={() => setStep(step + 1)} disabled={(step === 1 && (!vehiculo || !cliente)) || (step === 2 && finalArs <= 0)} className="w-full bg-blue-600 text-white p-4 rounded-2xl font-black flex justify-center items-center gap-2 disabled:opacity-40">Continuar <ArrowRight className="w-5 h-5" /></button> : <button onClick={confirmar} disabled={submitting} className="w-full bg-emerald-500 text-slate-950 p-4 rounded-2xl font-black flex justify-center items-center gap-2 disabled:opacity-50">{submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />} Confirmar venta</button>}</footer>
+    </div>
+  );
 }
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block"><span className="text-[10px] uppercase tracking-wider font-black text-slate-500 block mb-1.5">{label}</span>{children}</label>; }
+function Summary({ label, ars, usd, rate }: { label: string; ars: number; usd: number; rate: number }) { return <div className="flex items-center justify-between gap-3"><span className="text-sm font-bold text-slate-400">{label}</span><DualMoney ars={ars} usd={usd} rate={rate} primaryClassName="text-sm font-black text-white text-right" secondaryClassName="text-[10px] text-slate-500 text-right" compact /></div>; }
