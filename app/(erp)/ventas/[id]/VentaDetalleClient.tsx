@@ -40,10 +40,14 @@ export default function VentaDetalleClient({ venta }: { venta: any }) {
                         </p>
                     </div>
                 </div>
-                <div className="flex gap-3 print:hidden">
-                    <button onClick={() => window.print()} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center gap-2 transition-colors shadow-sm">
-                        <Printer className="w-4 h-4" /> Imprimir para Cliente
-                    </button>
+                <div className="flex flex-wrap gap-3 print:hidden">
+                    <Link
+                        href={`/documentos/boleto/${venta.id_venta}`}
+                        target="_blank"
+                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-2 transition-colors shadow-sm"
+                    >
+                        <Printer className="w-4 h-4" /> Boleto Compra-Venta Oficial
+                    </Link>
                     <Link href="/ventas" className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold flex items-center gap-2 transition-colors">
                         <ArrowLeft className="w-4 h-4" /> Volver al Historial
                     </Link>

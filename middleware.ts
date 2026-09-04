@@ -9,7 +9,6 @@ export function middleware(request: NextRequest) {
     path === "/login" ||
     path.startsWith("/api/health") ||
     path.startsWith("/api/internal/caddy/ask") ||
-    path.startsWith("/api/auth") ||
     path.startsWith("/_next") ||
     path.startsWith("/favicon.ico") ||
     path.startsWith("/uploads");

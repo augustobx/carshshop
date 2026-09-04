@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { guardarSenia, cancelarSenia } from '@/actions/senias';
-import { Loader2, Save, Ban, DollarSign, Banknote, History, ShoppingCart } from 'lucide-react';
+import { Loader2, Save, Ban, DollarSign, Banknote, History, ShoppingCart, Printer } from 'lucide-react';
 import { useConfigStore } from '@/store/useConfigStore';
 
 export default function SeniasManager({ vehiculo, clientes }: { vehiculo: any, clientes: any[] }) {
@@ -78,17 +78,24 @@ export default function SeniasManager({ vehiculo, clientes }: { vehiculo: any, c
                         </div>
                     </div>
 
-                    {/* BOTONES DE ACCIÓN (NUEVO BOTÓN DE VENTA) */}
+                    {/* BOTONES DE ACCIÓN (RECIBO OFICIAL Y VENTA DIRECTA) */}
                     <div className="flex flex-col md:flex-row gap-3 pt-4 border-t border-amber-200/50">
-                        <button onClick={() => handleCancelarSenia(seniaActiva.id_senia)} className="bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors flex-1 shadow-sm">
-                            <Ban className="w-5 h-5" /> Cancelar Seña y Liberar
-                        </button>
+                        <Link
+                            href={`/documentos/recibo/${seniaActiva.id_senia}`}
+                            target="_blank"
+                            className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors flex-1 shadow-md shadow-indigo-600/20"
+                        >
+                            <Printer className="w-5 h-5" /> Imprimir Recibo Oficial
+                        </Link>
                         <Link
                             href={`/ventas/nueva?v=${vehiculo.id_vehiculo}&c=${seniaActiva.id_cliente}`}
                             className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors flex-1 shadow-md shadow-emerald-600/20"
                         >
                             <ShoppingCart className="w-5 h-5" /> Facturar Venta Directo
                         </Link>
+                        <button onClick={() => handleCancelarSenia(seniaActiva.id_senia)} className="bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors flex-1 shadow-sm">
+                            <Ban className="w-5 h-5" /> Cancelar Seña
+                        </button>
                     </div>
                 </div>
             )}

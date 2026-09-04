@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, UserRound, Phone, Mail, MapPin, BadgeDollarSign, CarFront, HandCoins, CalendarClock } from 'lucide-react';
+import { ArrowLeft, UserRound, Phone, Mail, MapPin, BadgeDollarSign, CarFront, HandCoins, CalendarClock, Printer } from 'lucide-react';
 
 export default function ClienteCarpetaClient({ cliente }: { cliente: any }) {
     const [activeTab, setActiveTab] = useState<'resumen' | 'ventas' | 'senias' | 'prestamos'>('resumen');
@@ -91,20 +91,30 @@ export default function ClienteCarpetaClient({ cliente }: { cliente: any }) {
                     <div className="space-y-4">
                         {cliente.ventas.length === 0 ? <p className="text-slate-500 font-bold">No hay compras registradas.</p> : (
                             cliente.ventas.map((v: any) => (
-                                <Link href={`/ventas/${v.id_venta}`} key={v.id_venta} className="flex flex-col md:flex-row md:items-center justify-between p-5 border border-slate-200 rounded-2xl hover:border-indigo-300 hover:shadow-md transition-all group">
-                                    <div className="flex items-center gap-4">
+                                <div key={v.id_venta} className="flex flex-col md:flex-row md:items-center justify-between p-5 border border-slate-200 rounded-2xl hover:border-indigo-300 hover:shadow-md transition-all group">
+                                    <Link href={`/ventas/${v.id_venta}`} className="flex items-center gap-4 flex-1">
                                         <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-colors">
                                             <CarFront className="w-6 h-6" />
                                         </div>
                                         <div>
-                                            <p className="font-black text-slate-800 text-lg">{v.vehiculo.marca} {v.vehiculo.modelo}</p>
+                                            <p className="font-black text-slate-800 text-lg group-hover:text-indigo-600 transition-colors">{v.vehiculo.marca} {v.vehiculo.modelo}</p>
                                             <p className="text-sm font-bold text-slate-500">{new Date(v.fecha_venta).toLocaleDateString('es-AR')} • {v.forma_pago}</p>
                                         </div>
+                                    </Link>
+                                    <div className="mt-4 md:mt-0 text-right flex items-center gap-3">
+                                        <div>
+                                            <p className="text-2xl font-black text-emerald-600">U$S {formatMoney(v.precio_final_usd)}</p>
+                                        </div>
+                                        <Link
+                                            href={`/documentos/boleto/${v.id_venta}`}
+                                            target="_blank"
+                                            title="Imprimir Boleto de Compra-Venta"
+                                            className="p-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-xl border border-emerald-200 transition-colors"
+                                        >
+                                            <Printer className="w-4 h-4" />
+                                        </Link>
                                     </div>
-                                    <div className="mt-4 md:mt-0 text-right">
-                                        <p className="text-2xl font-black text-emerald-600">U$S {formatMoney(v.precio_final_usd)}</p>
-                                    </div>
-                                </Link>
+                                </div>
                             ))
                         )}
                     </div>
@@ -119,7 +129,7 @@ export default function ClienteCarpetaClient({ cliente }: { cliente: any }) {
                                         <p className="font-black text-slate-800 text-lg">{s.vehiculo?.marca} {s.vehiculo?.modelo}</p>
                                         <p className="text-sm font-bold text-slate-500">{new Date(s.fecha_senia).toLocaleDateString('es-AR')}</p>
                                     </div>
-                                    <div className="text-right flex items-center gap-4">
+                                    <div className="text-right flex items-center gap-3">
                                         <div>
                                             <p className="text-xl font-black text-emerald-600">U$S {formatMoney(s.monto_usd)}</p>
                                             <p className="text-xs font-bold text-slate-400">$ {formatMoney(s.monto_ars)} ARS</p>
@@ -127,6 +137,14 @@ export default function ClienteCarpetaClient({ cliente }: { cliente: any }) {
                                         <span className={`px-3 py-1 rounded-lg text-xs font-black uppercase ${s.estado === 'ACTIVA' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500'}`}>
                                             {s.estado}
                                         </span>
+                                        <Link
+                                            href={`/documentos/recibo/${s.id_senia}`}
+                                            target="_blank"
+                                            title="Imprimir Recibo Oficial de Seña"
+                                            className="p-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl border border-indigo-200 transition-colors"
+                                        >
+                                            <Printer className="w-4 h-4" />
+                                        </Link>
                                     </div>
                                 </div>
                             ))

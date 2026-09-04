@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Car, FileText, Wrench, Camera } from 'lucide-react';
+import { ArrowLeft, Car, FileText, Wrench, Camera, Printer, BadgeDollarSign } from 'lucide-react';
 import VehiculoForm from '@/components/vehiculos/VehiculoForm';
 import TareasManager from '@/components/vehiculos/TareasManager';
 import { useConfigStore } from '@/store/useConfigStore'; //
@@ -36,6 +36,23 @@ export default function VehiculoDashboardClient({ vehiculo, clientes }: { vehicu
                     <p className="text-slate-400 mt-2 text-lg font-medium">
                         {vehiculo.anio} • Patente: <span className="uppercase text-white">{vehiculo.patente || 'S/N'}</span> • {vehiculo.estado.replace(/_/g, ' ')}
                     </p>
+                    <div className="flex flex-wrap gap-2 mt-4">
+                        <Link
+                            href={`/documentos/ficha/${vehiculo.id_vehiculo}`}
+                            target="_blank"
+                            className="bg-white/10 hover:bg-white/20 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-white/20 transition-colors"
+                        >
+                            <Printer className="w-3.5 h-3.5 text-blue-400" /> Ficha de Salón / QR
+                        </Link>
+                        {vehiculo.estado !== 'VENDIDO' && (
+                            <Link
+                                href={`/ventas/nueva?v=${vehiculo.id_vehiculo}`}
+                                className="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors"
+                            >
+                                <BadgeDollarSign className="w-3.5 h-3.5" /> Cotizar / Vender
+                            </Link>
+                        )}
+                    </div>
                 </div>
 
                 <div className="bg-slate-800 p-5 rounded-xl border border-slate-700 min-w-[280px]">

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from "next/link";
-import { Plus, BadgeDollarSign, FileText, Calendar, CheckCircle2, Clock, CarFront, UserRound } from "lucide-react";
+import { Plus, BadgeDollarSign, FileText, Calendar, CheckCircle2, Clock, CarFront, UserRound, Printer } from "lucide-react";
 
 export default function VentasClient({ ventas }: { ventas: any[] }) {
     const formatMoney = (amount: number) => amount.toLocaleString('es-AR', { maximumFractionDigits: 0 });
@@ -125,9 +125,22 @@ export default function VentasClient({ ventas }: { ventas: any[] }) {
                                                 )}
                                             </td>
                                             <td className="px-6 py-4 text-right">
-                                                <Link href={`/ventas/${v.id_venta}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 hover:text-indigo-700 rounded-md transition-colors">
-                                                    <FileText className="w-3.5 h-3.5" /> Detalle Completo
-                                                </Link>
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <Link
+                                                        href={`/documentos/boleto/${v.id_venta}`}
+                                                        target="_blank"
+                                                        title="Imprimir Boleto Oficial de Compra-Venta"
+                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors border border-emerald-200"
+                                                    >
+                                                        <Printer className="w-3.5 h-3.5" /> Boleto
+                                                    </Link>
+                                                    <Link
+                                                        href={`/ventas/${v.id_venta}`}
+                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 hover:text-indigo-700 rounded-lg transition-colors border border-indigo-200"
+                                                    >
+                                                        <FileText className="w-3.5 h-3.5" /> Detalle
+                                                    </Link>
+                                                </div>
                                             </td>
                                         </tr>
                                     );

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { guardarProspecto, actualizarEstadoProspecto } from '@/actions/prospectos';
 import {
   UserCheck,
@@ -13,6 +14,8 @@ import {
   ArrowRight,
   Loader2,
   Filter,
+  MessageSquare,
+  ShoppingCart,
 } from 'lucide-react';
 import { EstadoProspecto } from '@prisma/client';
 
@@ -163,10 +166,20 @@ export default function ProspectosClient({
               {/* Datos de contacto */}
               <div className="space-y-1 text-xs text-slate-600">
                 {p.telefono && (
-                  <p className="flex items-center gap-2">
-                    <Phone className="w-3.5 h-3.5 text-slate-400" />
-                    <span>{p.telefono}</span>
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <p className="flex items-center gap-2">
+                      <Phone className="w-3.5 h-3.5 text-slate-400" />
+                      <span>{p.telefono}</span>
+                    </p>
+                    <a
+                      href={`https://wa.me/${p.telefono.replace(/[^0-9]/g, '')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-200 transition-colors"
+                    >
+                      <MessageSquare className="w-3 h-3 text-emerald-600" /> WhatsApp
+                    </a>
+                  </div>
                 )}
                 {p.email && (
                   <p className="flex items-center gap-2">
@@ -231,6 +244,16 @@ export default function ProspectosClient({
                   )}
                 </div>
               </div>
+
+              {/* Botón rápido para iniciar venta */}
+              {(p.estado === 'GANADO' || p.estado === 'NEGOCIACION') && (
+                <Link
+                  href={`/ventas/nueva?v=${p.id_vehiculo_interes || ''}`}
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-colors mt-2"
+                >
+                  <ShoppingCart className="w-3.5 h-3.5" /> Iniciar Venta / Facturar
+                </Link>
+              )}
             </div>
           ))
         )}
