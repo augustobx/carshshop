@@ -4,6 +4,7 @@ import { getTenantContext } from '@/lib/tenant-context';
 import { requireTenantRole } from '@/lib/user-auth';
 import { notFound, redirect } from 'next/navigation';
 import PWASplash from './PWASplash';
+import ModuleHelpButton from '@/components/ModuleHelpButton';
 
 export const metadata: Metadata = {
   title: 'OnlyCars Sales',
@@ -47,6 +48,7 @@ export default async function PWALayout({ children }: { children: React.ReactNod
     <div className="min-h-screen bg-slate-900 text-slate-900 select-none antialiased">
       <style dangerouslySetInnerHTML={{ __html: themeStyles }} />
       <div className="max-w-md mx-auto min-h-screen bg-slate-50 shadow-2xl relative overflow-hidden flex flex-col">
+        <ModuleHelpButton variant="floating" />
         <PWASplash logo={tenant.settings?.logoUrl || null} initialDolar={tenant.settings?.dolarActual || 1400}>
           {children}
         </PWASplash>
