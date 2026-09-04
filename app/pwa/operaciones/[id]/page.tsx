@@ -25,7 +25,7 @@ export default async function PwaOperacionPage({ params }: { params: Promise<{ i
         vehiculo_interes: true,
         cotizaciones: { orderBy: { createdAt: 'desc' }, take: 8 },
         senias: { where: { estado: 'ACTIVA' }, orderBy: { fecha_senia: 'desc' }, take: 1 },
-        ventas: { orderBy: { fecha_venta: 'desc' }, take: 1 },
+        ventas: { include: { entrega: true }, orderBy: { fecha_venta: 'desc' }, take: 1 },
       },
     }),
     db.tenantFeature.findUnique({ where: { tenantId_featureKey: { tenantId: tenant.id, featureKey: 'seller_pwa' } } }),
@@ -34,6 +34,7 @@ export default async function PwaOperacionPage({ params }: { params: Promise<{ i
   if (!p) notFound();
   if (role === RolMembresia.VENDEDOR && p.vendedorId !== user.id) redirect('/pwa/operaciones');
 
+  const sale = p.ventas[0] || null;
   const data = {
     id_prospecto: p.id_prospecto,
     estado: p.estado,
@@ -62,6 +63,9 @@ export default async function PwaOperacionPage({ params }: { params: Promise<{ i
       saldo_usd: Number(q.saldo_financiado_usd || 0),
       cantidad_cuotas: q.cantidad_cuotas,
       valor_cuota_usd: Number(q.valor_cuota_usd || 0),
+      tiene_permuta: q.tiene_permuta,
+      detalle_permuta: q.detalle_permuta || '',
+      valor_permuta_usd: Number(q.valor_permuta_usd || 0),
       fecha: q.createdAt.toISOString(),
       validez: q.validez_hasta?.toISOString() || null,
       observaciones: q.observaciones || '',
@@ -76,7 +80,21 @@ export default async function PwaOperacionPage({ params }: { params: Promise<{ i
       recibo: p.senias[0].recibo_nro,
       cotizacionId: p.senias[0].cotizacionId,
     } : null,
-    venta: p.ventas[0] ? { id: p.ventas[0].id_venta, boleto: p.ventas[0].numero_boleto, fecha: p.ventas[0].fecha_venta.toISOString() } : null,
+    venta: sale ? {
+      id: sale.id_venta,
+      boleto: sale.numero_boleto,
+      fecha: sale.fecha_venta.toISOString(),
+      usd: Number(sale.precio_final_usd || 0),
+      rate: Number(sale.cotizacion_dolar_venta || dolarActual),
+      forma_pago: sale.forma_pago,
+      permuta_usd: Number(sale.valor_toma_permuta_usd || 0),
+      entrega: sale.entrega ? {
+        estado: sale.entrega.estado,
+        programada: sale.entrega.fecha_programada?.toISOString() || null,
+        entregada: sale.entrega.fecha_entrega?.toISOString() || null,
+        notas: sale.entrega.notas || '',
+      } : null,
+    } : null,
   };
 
   return <OperacionMobileClient operacion={data} dolarActual={dolarActual} pwaConfig={normalizeSellerPwaConfig(feature?.config)} />;
