@@ -45,14 +45,43 @@ export async function agregarGasto(idTarea: number, idVehiculo: number, montoArs
     const tarea = await db.tarea.findFirst({ where: { id_tarea: idTarea, id_vehiculo: idVehiculo, tenantId: tenant.id } });
     const v = await vehicleForTenant(idVehiculo, tenant.id);
     if (!tarea || !v) return { success: false, error: 'Tarea o vehículo inválido.' };
-    const amount = Number(montoArs); const rate = Number(cotizacionDolar) > 0 ? Number(cotizacionDolar) : Number(tenant.settings?.dolarActual || 1400);
+
+    const amount = Number(montoArs);
+    const rate = Number(cotizacionDolar) > 0 ? Number(cotizacionDolar) : Number(tenant.settings?.dolarActual || 1400);
     if (amount <= 0 || rate <= 0 || !descripcion?.trim()) return { success: false, error: 'Monto, cotización y descripción son obligatorios.' };
     const montoUsd = Number((amount / rate).toFixed(2));
 
     await db.$transaction(async (tx) => {
-      await tx.gasto.create({ data: { tenantId: tenant.id, locationId: v.locationId || tenant.primaryLocationId || null, id_tarea: idTarea, id_vehiculo: idVehiculo, monto_ars: amount, monto_usd: montoUsd, descripcion: descripcion.trim(), categoria: 'Taller / Reacondicionamiento', tipo_movimiento: 'EGRESO' } });
+      await tx.gasto.create({
+        data: {
+          tenantId: tenant.id,
+          locationId: v.locationId || tenant.primaryLocationId || null,
+          id_vehiculo: idVehiculo,
+          monto_ars: amount,
+          monto_usd: montoUsd,
+          cotizacion: rate,
+          descripcion: descripcion.trim(),
+          categoria: `Taller / Tarea #${idTarea}`,
+          tipo_movimiento: 'EGRESO',
+        },
+      });
+
+      await tx.tarea.update({
+        where: { id_tarea: idTarea },
+        data: {
+          costo_ars: { increment: amount },
+          costo_usd: { increment: montoUsd },
+        },
+      });
+
       const nuevosGastosPrep = Number(v.gastos_preparacion_usd || 0) + montoUsd;
-      await tx.vehiculo.update({ where: { id_vehiculo: idVehiculo }, data: { gastos_preparacion_usd: nuevosGastosPrep, costo_total_real_usd: Number(v.precio_compra_usd || 0) + nuevosGastosPrep + Number(v.gastos_gestoria_usd || 0) } });
+      await tx.vehiculo.update({
+        where: { id_vehiculo: idVehiculo },
+        data: {
+          gastos_preparacion_usd: nuevosGastosPrep,
+          costo_total_real_usd: Number(v.precio_compra_usd || 0) + nuevosGastosPrep + Number(v.gastos_gestoria_usd || 0),
+        },
+      });
     });
 
     revalidatePath(`/vehiculos/${idVehiculo}`); revalidatePath('/caja'); revalidatePath('/vehiculos'); revalidatePath('/motos');
