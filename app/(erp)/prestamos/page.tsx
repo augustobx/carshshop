@@ -8,40 +8,33 @@ export const dynamic = "force-dynamic";
 
 export default async function PrestamosPage() {
     const tenant = await getTenantContext();
+    const dolarActual = Number(tenant.settings?.dolarActual || 1400);
 
-    // Buscamos todos los préstamos del tenant con sus clientes y cuotas
     const prestamosDb = await db.prestamo.findMany({
         where: { tenantId: tenant.id },
         orderBy: { fecha_prestamo: 'desc' },
-        include: {
-            cliente: true,
-            cuotas: {
-                orderBy: { numero_cuota: 'asc' }
-            }
-        }
+        include: { cliente: true, cuotas: { orderBy: { numero_cuota: 'asc' } } }
     });
 
-    // LIMPIEZA ABSOLUTA DE DECIMALES Y FECHAS (A prueba de balas para Next.js)
-    const prestamosPlanos = prestamosDb.map((p: any) => ({
+    const prestamos = prestamosDb.map((p: any) => ({
         ...p,
         capital_entregado_usd: Number(p.capital_entregado_usd),
         total_devolver_usd: Number(p.total_devolver_usd),
         cotizacion_dolar_prestamo: Number(p.cotizacion_dolar_prestamo),
-        // Empaquetamos la fecha a texto seguro
-        fecha_str: p.fecha_prestamo ? new Date(p.fecha_prestamo).toISOString() : new Date().toISOString(),
+        fecha_str: p.fecha_prestamo.toISOString(),
         cuotas: p.cuotas.map((c: any) => ({
             ...c,
             monto_usd: Number(c.monto_usd),
             monto_pagado_ars: c.monto_pagado_ars ? Number(c.monto_pagado_ars) : null,
             cotizacion_pago: c.cotizacion_pago ? Number(c.cotizacion_pago) : null,
-            fecha_vto_str: c.fecha_vencimiento ? new Date(c.fecha_vencimiento).toISOString() : null,
-            fecha_pago_str: c.fecha_pago ? new Date(c.fecha_pago).toISOString() : null,
+            fecha_vto_str: c.fecha_vencimiento.toISOString(),
+            fecha_pago_str: c.fecha_pago ? c.fecha_pago.toISOString() : null,
         }))
     }));
 
     return (
         <Suspense fallback={<div className="flex justify-center items-center h-screen"><Loader2 className="w-10 h-10 animate-spin text-indigo-600" /></div>}>
-            <PrestamosClient prestamos={prestamosPlanos} />
+            <PrestamosClient prestamos={prestamos} dolarActual={dolarActual} />
         </Suspense>
     );
 }
